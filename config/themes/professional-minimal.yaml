@@ -1,0 +1,34 @@
+id: professional-minimal
+name: 智效进化社专业极简
+
+colors:
+  navy: "#0B1F3A"
+  navy_soft: "#1E3A5F"
+  teal: "#0F9F91"
+  teal_soft: "#DFF5F2"
+  text: "#2B3340"
+  muted: "#718096"
+  surface: "#F4F8F8"
+  border: "#D7E4E5"
+  white: "#FFFFFF"
+  code_background: "#101C2C"
+  code_text: "#E6F1F0"
+  warning_background: "#FFF8E8"
+  warning_border: "#E5B94E"
+
+typography:
+  body_size: 16
+  body_line_height: 1.8
+  h1_size: 24
+  h2_size: 20
+  h3_size: 17
+  note_size: 13
+  code_size: 13
+
+spacing:
+  page_padding: 20
+  paragraph_margin: 14
+  section_margin: 30
+  block_margin: 20
+  radius: 8
+

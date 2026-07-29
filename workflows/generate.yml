@@ -1,0 +1,37 @@
+name: Content Operations Agent
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 1 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install .
+      - name: Discover, select and generate local draft
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: wechat-ai-publisher agent run --draft-only
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: content-agent-drafts
+          path: |
+            runtime/
+            articles/drafts/
+          if-no-files-found: warn
+          retention-days: 14
+

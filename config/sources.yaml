@@ -1,0 +1,79 @@
+max_items_per_source: 8
+lookback_days: 45
+timeout_seconds: 20
+github_token_env: GITHUB_TOKEN
+
+include_keywords:
+  - ai
+  - privacy
+  - risk
+  - scam
+  - fraud
+  - consumer
+  - money
+  - cost
+  - saving
+  - job
+  - career
+  - layoff
+  - salary
+  - health
+  - family
+  - children
+  - education
+  - travel
+  - work
+  - life
+  - security
+  - 失业
+  - 裁员
+  - 工资
+  - 降薪
+  - 副业
+  - 省钱
+  - 消费
+  - 诈骗
+  - 隐私
+  - 健康
+  - 看病
+  - 养老
+  - 孩子
+  - 教育
+  - 家庭
+  - 情绪
+  - 旅行
+
+rss:
+  - name: OpenAI News
+    url: https://openai.com/news/rss.xml
+    enabled: true
+  - name: Google AI
+    url: https://blog.google/technology/ai/rss/
+    enabled: true
+  - name: Google Workspace Updates
+    url: https://workspaceupdates.googleblog.com/feeds/posts/default
+    enabled: false
+  - name: Microsoft 365 Blog
+    url: https://www.microsoft.com/en-us/microsoft-365/blog/feed/
+    enabled: false
+  - name: Zapier Productivity
+    url: https://zapier.com/blog/feeds/latest/
+    enabled: false
+  - name: Spring Blog
+    url: https://spring.io/blog.atom
+    enabled: false
+
+github:
+  - name: Spring AI
+    repo: spring-projects/spring-ai
+    enabled: false
+  - name: MCP Java SDK
+    repo: modelcontextprotocol/java-sdk
+    enabled: false
+  - name: OpenAI Codex
+    repo: openai/codex
+    enabled: false
+  - name: Claude Code
+    repo: anthropics/claude-code
+    enabled: false
+

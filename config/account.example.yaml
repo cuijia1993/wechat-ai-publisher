@@ -1,0 +1,61 @@
+account:
+  name: 智效进化社
+  author: 智效进化社
+  default_digest: 关注 AI 如何影响普通人的工作、钱包、安全、健康与家庭，提供看得懂、用得上的判断和避坑清单。
+
+model:
+  model: qwen3.7-max-2026-05-20
+  base_url: https://llm-q5islkwwval2g1sf.cn-beijing.maas.aliyuncs.com/compatible-mode/v1
+  base_url_env: OPENAI_BASE_URL
+  api_key_env: OPENAI_API_KEY
+  temperature: 0.3
+  max_retries: 3
+
+content:
+  topic_file: topics/topic-pool.yaml
+  style_guide: config/style-guide.md
+  prompt_dir: config/prompts
+  output_dir: runtime
+
+discovery:
+  sources_file: config/sources.yaml
+
+agent:
+  max_steps: 24
+  max_revisions: 2
+  stage_timeout_seconds: 180
+  draft_only: true
+
+render:
+  theme_file: config/themes/professional-minimal.yaml
+  generated_assets_dir: assets/generated
+  image:
+    provider: dashscope_native
+    model: qwen-image-2.0-pro-2026-06-22
+    endpoint: https://llm-q5islkwwval2g1sf.cn-beijing.maas.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation
+    endpoint_env: IMAGE_API_BASE_URL
+    api_key_env: OPENAI_API_KEY
+    timeout_seconds: 90
+
+quality:
+  require_sources: true
+  require_verification_for_claims: true
+  editorial_min_score: 8.0
+  visual_min_score: 8.0
+  forbidden_terms:
+    - 公司内部
+    - 生产环境
+    - 绝对领先
+    - 百分之百
+  internal_patterns:
+    - "\\b(?:10|127)\\.\\d+\\.\\d+\\.\\d+\\b"
+    - "https?://[^\\s/]+\\.(?:internal|local)\\b"
+
+publish:
+  mode: draft_only
+  dry_run: true
+  require_human_approval: true
+  auto_publish_after_approval: false
+  app_id_env: WECHAT_APP_ID
+  app_secret_env: WECHAT_APP_SECRET
+

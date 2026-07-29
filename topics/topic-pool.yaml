@@ -1,0 +1,111 @@
+topics:
+  - id: java-ai-unit-test
+    title: 用 AI 补 Java 单元测试，如何避免生成无效断言
+    category: 真实开发案例
+    target_reader: 3 年以上 Java 工程师
+    reader_problem: AI 能快速生成测试，但断言经常只验证代码能运行。
+    core_conclusion: AI 负责生成候选测试，人负责定义行为边界并验证断言有效性。
+    required_evidence:
+      - 可复现的 Java Demo
+      - 修改前后的测试对比
+      - 实际测试运行记录
+    sources: []
+    verification_records: []
+    product_hook: Java 单元测试提示词模板
+    score: 90
+    status: backlog
+
+  - id: ai-meeting-actions
+    title: 会议开了一小时，真正需要人决定的可能只有十分钟
+    category: 日常办公提效
+    target_reader: 经常参加会议的职场人与团队负责人
+    reader_problem: 会议记录很多，但决定、负责人和截止时间经常埋在长篇纪要里。
+    core_conclusion: AI 适合整理候选纪要，人应集中确认决定、责任人与时间。
+    required_evidence:
+      - 一份脱敏会议材料
+      - 原始整理方式与 AI 工作流对比
+      - 人工发现的遗漏或错误
+    sources: []
+    verification_records: []
+    product_hook: 会议待办提取模板
+    score: 95
+    status: backlog
+
+  - id: ai-weekly-report
+    title: 别再让 AI 直接写周报，先让它找出你真正完成了什么
+    category: 日常办公提效
+    target_reader: 需要写周报、复盘或项目进展的知识工作者
+    reader_problem: AI 写出的周报看起来完整，却容易空泛、遗漏事实或夸大成果。
+    core_conclusion: 先从日历、任务和工作记录提取事实，再由 AI 组织表达。
+    required_evidence:
+      - 脱敏工作记录
+      - AI 初稿与人工修改对比
+      - 事实核对清单
+    sources: []
+    verification_records: []
+    product_hook: 事实驱动周报模板
+    score: 92
+    status: backlog
+
+  - id: ai-information-filter
+    title: 收藏了一堆资料却没时间看，先让 AI 帮你做信息筛选
+    category: 个人工作系统
+    target_reader: 面对大量文章、报告和行业信息的知识工作者
+    reader_problem: 信息越存越多，真正影响决策的内容却很难及时找到。
+    core_conclusion: AI 先按问题和证据筛选，人再阅读少量高价值原文。
+    required_evidence:
+      - 一组可公开的样例资料
+      - 筛选规则与输出示例
+      - 误判或漏判样本
+    sources: []
+    verification_records: []
+    product_hook: AI 信息筛选提示词
+    score: 90
+    status: backlog
+
+  - id: ai-life-privacy
+    title: 把孩子照片和家庭信息发给 AI 前，先想清楚这些隐私风险
+    category: 隐私与家庭安全
+    target_reader: 会用 AI 处理照片、旅行、消费和家庭事务的普通用户
+    reader_problem: 为了获得更准确建议，用户可能无意上传孩子照片、身份、位置和家庭成员信息。
+    core_conclusion: 先做数据最小化和脱敏，再让 AI 处理低风险规划任务。
+    required_evidence:
+      - 公开平台隐私说明
+      - 脱敏前后输入示例
+      - 生活场景隐私检查清单
+    sources: []
+    verification_records: []
+    product_hook: 生活场景 AI 隐私清单
+    score: 98
+    status: selected
+
+  - id: cursor-impact-analysis
+    title: 让 Cursor 分析复杂 Java 需求时，如何检查遗漏的影响点
+    category: AI 工具实测
+    target_reader: Java 技术负责人
+    reader_problem: AI 可以列出影响范围，但容易漏掉异步链路、配置和数据迁移。
+    core_conclusion: 影响面分析必须结合调用链、数据流和运行时验证。
+    required_evidence:
+      - 脱敏 Demo 项目
+      - AI 初次分析结果
+      - 人工补充的遗漏清单
+    sources: []
+    verification_records: []
+    product_hook: Java 需求影响面分析模板
+    score: 85
+    status: backlog
+
+  - id: framework-demo
+    title: AI 工具又出新功能，别急着改变工作习惯
+    category: 框架演示
+    target_reader: 希望用 AI 改善日常工作的知识工作者
+    reader_problem: 希望先验证内容生产、质量门禁和排版链路是否正常。
+    core_conclusion: AI 只生成候选内容，真实结论必须由人工提供证据并确认。
+    required_evidence: []
+    sources: []
+    verification_records:
+      - 本选题仅用于本地框架演示，不包含真实模型测试或量化结论。
+    product_hook: AI 内容生产检查清单
+    score: 1
+    status: demo
+

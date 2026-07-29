@@ -1,0 +1,172 @@
+# 智效进化社：微信公众号 AI 发布框架
+
+一个面向普通读者的安全优先内容运营 Agent：寻找 AI 对工作、钱包、安全、健康、家庭与生活选择的真实影响，
+完成选题、调研、故事化写作、审查修订和视觉制作，最终导出本地 Markdown/HTML 草稿。
+技术内容保留为深度栏目，但不再是默认受众入口。
+
+Agent 模式严格 `draft-only`，不会实例化微信客户端。原有人工审批后的草稿箱上传命令仍保留，但不会被 Agent 自动调用。
+
+## 快速开始
+
+要求 Python 3.11+（当前项目按 Python 3.13 验证）。
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
+cp config/account.example.yaml config/account.yaml
+cp .env.example .env
+pytest
+```
+
+程序启动时会自动读取项目根目录的 `.env`；系统环境变量优先，不会被 `.env` 覆盖。
+
+## 内容运营 Agent
+
+Agent 使用有界状态机，允许的动作固定为：发现、选题、调研、内容规划、视觉规划、写作、审查、修订、质量门禁、发布前主编审查、资产渲染、多模态视觉审查、导出和停止。模型负责内容决策，程序控制最大步骤、最多修订次数和停止条件。
+
+选题阶段不是单纯生成标题，而是输出 `topic-brief.json`、`topic-audit.json` 和
+`evidence-contract.json`。每条核心结论必须绑定具体证据；只有官方 Release 时，
+实测、教程、故障复盘和横评会自动降级为版本解读/迁移清单，无法形成价值时直接停止。
+常规选题还必须通过大众门禁：普通读者适配分不低于 75，标题以工作、钱、安全、健康、
+家庭或生活后果而非工具/版本开场，前置知识不超过 2 项，并明确非该工具用户可复用的价值。
+内容组合按 35% 工作与收入、25% 钱/消费/诈骗、25% 健康/家庭/教育/情绪/生活、
+15% 技术深度控制。
+
+质量门禁通过后，发布前主编会结合文章、资料卡、证据契约、内容计划和来源摘要检查事实边界与发布质量；素材渲染后，视觉审稿人会结合尺寸检查结果和实际图片检查封面承诺、信息增量、可读性与视觉一致性。两项评分默认均不得低于 8 分。
+
+```bash
+# 查看官方来源信号，不生成文章
+wechat-ai-publisher agent discover
+
+# 自动生成本地草稿
+wechat-ai-publisher agent run --draft-only
+
+# 不访问网络和模型的完整演练
+wechat-ai-publisher agent run --draft-only --demo
+
+# 查看或恢复任务
+wechat-ai-publisher agent status --run-id <run_id>
+wechat-ai-publisher agent resume --run-id <run_id>
+```
+
+每一步都会写入 `runtime/agent-<run_id>/agent-state.json`。网络或模型失败时，`resume` 从失败动作继续，不重复已经完成的抓取和模型调用。成功草稿写入 `articles/drafts/`。
+
+`--demo` 产物会标记为 `publication_status=demo`，只用于流程与视觉验收；即使门禁通过，也不能调用真实微信草稿接口。
+
+来源在 `config/sources.yaml` 配置，默认启用 OpenAI 与 Google AI，优先寻找工作、健康、
+消费和生活影响。Google Workspace、Microsoft、Zapier、Spring Blog 及各类开发工具
+GitHub Release 默认关闭，仅在规划办公或技术深度栏目时启用。
+外部正文始终按不可信数据处理，不能改变 Agent 指令。
+
+一次完整运行通常包含选题、研究、规划、写作和审查等多次模型请求；实际耗时与费用取决于模型。`agent.max_steps`、`max_revisions` 和阶段超时在 `config/account.yaml` 调整。
+
+## 视觉系统
+
+默认主题为 `config/themes/professional-minimal.yaml`，使用深蓝 + 青绿色专业极简风格。正文 HTML 全部采用微信兼容的内联样式，不依赖外部 CSS、JavaScript、SVG、flex/grid 或 webfont。
+
+Agent 会为每篇文章规划 2～3 个高价值视觉节点，并确定性生成：
+
+- 900×383 PNG 封面；
+- 核心结论卡、步骤流程和来源说明等 HTML 信息组件；
+- 可分享的检查清单 PNG；
+- `visual-manifest.json`，记录图片用途、生成方式、模型、提示词和版权说明。
+
+概念插画已接入阿里云原生 DashScope 接口，模型为
+`qwen-image-2.0-pro-2026-06-22`。该模型不支持 OpenAI compatible-mode，
+因此使用 `/api/v1/services/aigc/multimodal-generation/generation` 独立调用，并默认复用
+`OPENAI_API_KEY`。密钥未配置、超时、额度或内容安全失败时自动降级为 Pillow 固定模板，不阻塞草稿生成。
+
+可单独重渲染现有 Markdown：
+
+```bash
+wechat-ai-publisher rerender articles/drafts/example.md \
+  --category 版本解读 \
+  --output-dir articles/drafts/visual-preview
+```
+
+输出包含 Markdown、主题 HTML、封面、正文图片和视觉资产清单。真实上传微信前，本地图片仍会经过现有上传逻辑替换为微信图片 URL。
+
+## 手工选题流水线
+
+先编辑 `topics/topic-pool.yaml`。只要选题声明了 `required_evidence`，就必须提供真实的 `verification_records`；没有证据时，流水线会在资料卡阶段停止，不允许模型补造。
+
+```bash
+# 不访问网络，验证项目接线（示例选题需先补充 verification_records）
+wechat-ai-publisher generate --demo --topic java-ai-unit-test
+
+# 调用 OpenAI 兼容接口
+wechat-ai-publisher generate --topic java-ai-unit-test
+
+# 根据上一步输出的 job_id 生成 HTML
+wechat-ai-publisher render --job <job_id>
+
+# 质量门禁通过后，只生成本地预览
+wechat-ai-publisher publish --job <job_id> --dry-run
+```
+
+## 接入 OpenAI 兼容模型
+
+配置项在 `config/account.yaml`：
+
+- `model.model`：模型名称，当前配置为 `qwen3.7-max-2026-05-20`。
+- `model.base_url`：默认兼容接口地址，当前配置为阿里云 MaaS 地址。
+- `model.api_key_env`：密钥环境变量名，默认 `OPENAI_API_KEY`。
+- `model.base_url_env`：可覆盖默认地址的环境变量名，默认 `OPENAI_BASE_URL`。
+- `model.temperature`：技术内容建议保持在 0.2～0.4。
+
+适配器使用兼容面更广的 Chat Completions 接口，并要求模型按 JSON Schema 返回结构化结果。不同供应商若不支持该接口，需要在 `providers/` 增加独立适配器。
+
+## 写入微信草稿箱
+
+1. 在公众号后台确认 `media/uploadimg`、`material/add_material`、`draft/add` 权限。
+2. 设置 `WECHAT_APP_ID`、`WECHAT_APP_SECRET`。
+3. 将 `config/account.yaml` 中 `publish.dry_run` 改为 `false`。
+4. 准备本地封面，人工审核后执行：
+
+```bash
+wechat-ai-publisher publish \
+  --job <job_id> \
+  --approved \
+  --cover assets/covers/cover.jpg
+```
+
+真实上传同时满足以下条件才会执行：质量门禁通过、配置关闭 dry-run、提供 `--approved`、封面存在、微信凭据完整。任务目录已有成功的 `publish-result.json` 时会直接返回原结果，避免重复创建草稿。
+
+## 目录
+
+```text
+config/                 账号、来源、模型、提示词和风格规范
+topics/                 选题池
+research/               可人工维护的研究资料
+articles/               草稿、审稿和已发布内容
+assets/                 封面与正文图片
+templates/              微信 HTML 预览模板
+runtime/agent-<run_id>/ Agent 状态、来源、选题、审稿与门禁产物
+src/wechat_ai_publisher 业务代码
+tests/                  单元测试和 dry-run 端到端测试
+workflows/              GitHub Actions 模板
+```
+
+每个任务都有唯一 ID。Agent 的 `agent-state.json` 记录逐步状态、模型、提示词版本、耗时和产物；证据不足、修订超限或质量门禁失败时会停止，不会导出为可发布草稿。
+
+## GitHub Actions
+
+确认选题证据、模型配置和 Secrets 后，将模板复制到 GitHub 工作流目录：
+
+```bash
+mkdir -p .github/workflows
+cp workflows/generate.yml .github/workflows/generate.yml
+```
+
+需要配置 `OPENAI_API_KEY`，自定义服务还需配置 `OPENAI_BASE_URL`。工作流使用 GitHub 自带 Token 读取 Release，只生成并保存本地草稿产物，不包含微信凭据，不上传或发布微信文章。
+
+## 当前边界
+
+- 未接入飞书多维表格审批和机器人通知。
+- 自动调研仅限配置的官方 RSS/Atom 和 GitHub Release；未接入开放式全网搜索。
+- 未自动编译文章中的任意代码，也不会把官方发布说明等同于真实项目验证。
+- 外部生图只用于无人物、无商标的概念插画；运行结果和产品界面仍必须使用真实截图。
+- 未实现发布后指标采集和自动群发。
+- 外部 API 测试均使用 mock，首次真实接入必须用测试文章完成公众号后台验收。
+

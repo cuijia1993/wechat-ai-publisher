@@ -1,0 +1,24 @@
+.env
+.DS_Store
+.idea/
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# 运行时产物和可能包含未发布内容的文件
+runtime/*
+!runtime/.gitkeep
+research/*
+!research/.gitkeep
+articles/drafts/*
+!articles/drafts/.gitkeep
+articles/reviewed/*
+!articles/reviewed/.gitkeep
+

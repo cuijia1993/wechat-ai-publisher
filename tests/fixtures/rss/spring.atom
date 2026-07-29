@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Spring Blog</title>
+  <entry>
+    <title>Spring AI Agent Observability Update</title>
+    <link href="https://spring.io/blog/agent-observability"/>
+    <updated>2026-07-20T08:00:00Z</updated>
+    <summary>Java agent tool calling, MCP and observability improvements.</summary>
+  </entry>
+</feed>
+
