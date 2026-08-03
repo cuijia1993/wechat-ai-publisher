@@ -80,15 +80,24 @@ class DraftWriter:
             for asset_id, relative_url in asset_urls.items():
                 token = f"{{{{asset:{asset_id}}}}}"
                 blocks = {anchor: value.replace(token, relative_url) for anchor, value in blocks.items()}
-            prelude = blocks.pop("__prelude__", "")
-            visual_blocks = blocks
+            copied_assets.html_blocks = blocks
+            for metadata in ([copied_assets.cover] if copied_assets.cover else []) + copied_assets.images:
+                if metadata is not None:
+                    metadata.path = asset_urls[metadata.id]
+            preview_blocks = dict(blocks)
+            prelude = preview_blocks.pop("__prelude__", "")
+            visual_blocks = preview_blocks
             manifest_path = self.output_dir / f"{base}.visual-manifest.json"
             self._atomic_write(
                 manifest_path,
                 copied_assets.model_dump_json(indent=2),
             )
             result["visual_manifest"] = str(manifest_path)
-            result["cover"] = copied_assets.cover.path if copied_assets.cover else ""
+            result["cover"] = (
+                str(self.output_dir / asset_urls[assets.cover.id])
+                if assets.cover
+                else ""
+            )
 
         self._atomic_write(markdown_path, article.markdown)
         self._atomic_write(

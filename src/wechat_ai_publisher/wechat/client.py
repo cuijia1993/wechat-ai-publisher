@@ -14,6 +14,7 @@ class WechatAPIError(RuntimeError):
 
 class WechatClient:
     BASE_URL = "https://api.weixin.qq.com/cgi-bin"
+    DATACUBE_URL = "https://api.weixin.qq.com/datacube"
 
     def __init__(
         self,
@@ -109,4 +110,17 @@ class WechatClient:
         if not payload.get("media_id"):
             raise WechatAPIError("创建草稿响应缺少 media_id")
         return str(payload["media_id"])
+
+    def get_article_total_detail(self, publish_date: str) -> dict[str, Any]:
+        response = self.http.post(
+            f"{self.DATACUBE_URL}/getarticletotaldetail",
+            params={"access_token": self.access_token()},
+            json={"begin_date": publish_date, "end_date": publish_date},
+        )
+        response.raise_for_status()
+        payload = self._ensure_success(response.json())
+        articles = payload.get("list")
+        if not isinstance(articles, list):
+            raise WechatAPIError("图文统计响应缺少 list")
+        return payload
 

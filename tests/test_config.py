@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def test_load_config_resolves_project_paths():
     config = load_config(ROOT / "config" / "account.example.yaml")
 
-    assert config.account.name == "智效进化社"
+    assert config.account.name == "智效进化论"
     assert "普通人的工作、钱包、安全、健康与家庭" in config.account.default_digest
     assert config.model.model == "qwen3.7-max-2026-05-20"
     assert config.model.base_url == (

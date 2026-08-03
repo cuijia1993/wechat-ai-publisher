@@ -3,8 +3,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from wechat_ai_publisher.domain.models import Article
+from wechat_ai_publisher.domain.models import Article, ArticleAssets
 from wechat_ai_publisher.rendering.formatter import WechatFormatter
+from wechat_ai_publisher.rendering.sanitize import sanitize_wechat_html
 from wechat_ai_publisher.wechat.client import WechatClient
 
 
@@ -23,6 +24,7 @@ class DraftPublisher:
         require_approval: bool,
         cover: Path | None = None,
         asset_root: Path | None = None,
+        assets: ArticleAssets | None = None,
     ) -> dict[str, str | bool]:
         if not dry_run and require_approval and not approved:
             raise PermissionError("未提供人工审核通过标记，禁止创建微信草稿")
@@ -36,8 +38,19 @@ class DraftPublisher:
             if existing.get("media_id"):
                 return existing
 
-        body = self.formatter.render_body(article.markdown, include_h1=False)
-        preview = self.formatter.render_preview(article.title, article.markdown)
+        visual_blocks = dict(assets.html_blocks) if assets else {}
+        prelude = visual_blocks.pop("__prelude__", "")
+        body = sanitize_wechat_html(prelude) + self.formatter.render_body(
+            article.markdown,
+            include_h1=False,
+            visual_blocks=visual_blocks,
+        )
+        preview = self.formatter.render_preview(
+            article.title,
+            article.markdown,
+            prelude_html=prelude,
+            visual_blocks=visual_blocks,
+        )
         preview_path = output_dir / "preview.html"
         preview_path.write_text(preview, encoding="utf-8")
 
@@ -50,6 +63,8 @@ class DraftPublisher:
         else:
             if not self.client:
                 raise ValueError("真实上传需要微信客户端")
+            if cover is None and assets and assets.cover:
+                cover = Path(assets.cover.path)
             if not cover or not cover.is_file():
                 raise ValueError("真实上传必须提供存在的封面图片")
             for image in self.formatter.local_images(body):

@@ -62,6 +62,15 @@ def test_agent_runs_to_local_draft_and_resume_is_idempotent(tmp_path):
     assert Path(state.outputs["draft_html"]).is_file()
     assert Path(state.outputs["visual_manifest"]).is_file()
     assert Path(state.outputs["cover"]).is_file()
+    publication_manifest = json.loads(
+        Path(state.outputs["publication_manifest"]).read_text(encoding="utf-8")
+    )
+    assert publication_manifest["status"] == "ready_to_publish"
+    assert publication_manifest["job_id"].startswith("agent-")
+    assert all(
+        not Path(value).is_absolute()
+        for value in publication_manifest["outputs"].values()
+    )
     assert Path(state.outputs["topic_brief"]).is_file()
     assert Path(state.outputs["evidence_contract"]).is_file()
     assert [step.action for step in state.steps] == [
@@ -239,6 +248,7 @@ def test_visual_reviewer_blocks_export(tmp_path):
     assert [step.action for step in state.steps][-1] == "visual_review"
     assert "visual_review" in state.outputs
     assert "draft_markdown" not in state.outputs
+    assert "publication_manifest" not in state.outputs
 
 
 class ConceptVisualProvider(DemoProvider):

@@ -253,7 +253,7 @@ class AssetMetadata(BaseModel):
     model: str | None = None
     prompt: str | None = None
     source_url: str | None = None
-    copyright_note: str = "由智效进化社模板生成"
+    copyright_note: str = "由智效进化论模板生成"
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 

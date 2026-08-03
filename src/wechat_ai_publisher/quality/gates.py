@@ -25,9 +25,28 @@ RUNTIME_ASSERTION_PATTERN = re.compile(
     r"(?:提升|降低)了?\s*\d+(?:\.\d+)?%"
 )
 RUNTIME_EVIDENCE_KINDS = {"runtime_log", "benchmark", "manual_verification"}
-SCENE_PATTERN = re.compile(r"周[一二三四五六日]|早上|下午|下班|开会|同事|客户|家人|小[\u4e00-\u9fff]")
 EXAMPLE_PATTERN = re.compile(r"例如|比如|示例|输入|输出|原文|改写前|改写后|提示词|清单")
 TWIST_PATTERN = re.compile(r"却|没想到|失败|遗漏|返工|出错|错误|不准确|人工修改|最后发现")
+EXAMPLE_REQUIRED_CONTENT_TYPES = {
+    "workplace_guide",
+    "life_idea",
+    "team_workflow",
+    "case_study",
+    "tutorial",
+    "experiment",
+    "comparison",
+}
+NUMBERED_HEADING_PATTERN = re.compile(
+    r"^#{2,3}\s+第[一二三四五六七八九十\d]+(?:个|步|种|点|项|招|条)",
+    re.MULTILINE,
+)
+TEMPLATE_SCENE_PATTERN = re.compile(
+    r"(?:周[一二三四五六日]|早上|上午|下午|晚上|下班)"
+    r"[\s\S]{0,80}?小[\u4e00-\u9fff]"
+)
+GENERIC_TRANSITION_PATTERN = re.compile(
+    r"问题是|更稳妥的做法是|值得注意的是|真正重要的是|真正危险的是"
+)
 
 
 class QualityGate:
@@ -102,27 +121,64 @@ class QualityGate:
                     message="正文缺少足够的实质段落，不能仅靠标题、清单或视觉组件形成文章",
                 )
             )
-        if topic.audience_scope in {"broad_public", "knowledge_worker"}:
-            missing_story_parts = [
+        if (
+            topic.audience_scope in {"broad_public", "knowledge_worker"}
+            and topic.content_type in EXAMPLE_REQUIRED_CONTENT_TYPES
+        ):
+            missing_example_parts = [
                 name
                 for name, pattern in (
-                    ("人物与时间场景", SCENE_PATTERN),
                     ("具体输入输出示例", EXAMPLE_PATTERN),
                     ("失败、意外或人工修改", TWIST_PATTERN),
                 )
                 if not pattern.search(article.markdown)
             ]
-            if missing_story_parts:
+            if missing_example_parts:
                 findings.append(
                     GateFinding(
-                        code="missing_story_elements",
-                        message=f"大众文章缺少故事要素：{'、'.join(missing_story_parts)}",
+                        code="missing_example_elements",
+                        message=(
+                            "教程与案例文章缺少必要要素："
+                            f"{'、'.join(missing_example_parts)}"
+                        ),
                     )
                 )
 
         headings = re.findall(r"^#{2,3}\s+(.+)$", article.markdown, re.MULTILINE)
-        if len(headings) < 4:
-            findings.append(GateFinding(code="missing_structure", message="正文至少需要 4 个二、三级章节"))
+        if len(headings) < 3:
+            findings.append(GateFinding(code="missing_structure", message="正文至少需要 3 个二、三级章节"))
+
+        numbered_headings = NUMBERED_HEADING_PATTERN.findall(article.markdown)
+        if len(numbered_headings) >= 3:
+            findings.append(
+                GateFinding(
+                    code="template_numbered_headings",
+                    message="连续使用多个编号式小标题，建议合并或改为描述实际内容的标题",
+                    severity="warning",
+                )
+            )
+
+        opening = content_without_code[:350]
+        if (
+            TEMPLATE_SCENE_PATTERN.search(opening)
+            and re.search(r"虚构|组合场景", article.markdown)
+        ):
+            findings.append(
+                GateFinding(
+                    code="template_fictional_opening",
+                    message="检测到模板化虚构人物开场；能用真实事实讲清时不要新增“小林/小王”",
+                    severity="warning",
+                )
+            )
+
+        if len(GENERIC_TRANSITION_PATTERN.findall(article.markdown)) >= 3:
+            findings.append(
+                GateFinding(
+                    code="repetitive_transitions",
+                    message="正文重复使用总结式过渡语，建议改成事实、动作或直接判断",
+                    severity="warning",
+                )
+            )
 
         for term in self.config.forbidden_terms:
             if term in text:

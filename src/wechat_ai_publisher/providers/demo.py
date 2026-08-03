@@ -212,7 +212,7 @@ class DemoProvider:
                 title=title,
                 digest=digest,
                 markdown=markdown,
-                author="智效进化社",
+                author="智效进化论",
                 publication_status="demo",
             )
         elif response_model is ReviewResult:

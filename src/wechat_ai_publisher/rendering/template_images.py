@@ -72,7 +72,7 @@ class TemplateImageRenderer:
         subtitle: str,
         category: str,
         output: Path,
-        brand: str = "智效进化社",
+        brand: str = "智效进化论",
     ) -> Path:
         colors = self.theme.colors
         image = Image.new("RGB", (900, 383), colors.navy)
@@ -106,7 +106,7 @@ class TemplateImageRenderer:
         title: str,
         items: list[str],
         output: Path,
-        brand: str = "智效进化社",
+        brand: str = "智效进化论",
     ) -> Path:
         colors = self.theme.colors
         item_font = _font(22)

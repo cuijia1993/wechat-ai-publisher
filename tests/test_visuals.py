@@ -5,6 +5,7 @@ from pathlib import Path
 import httpx
 from PIL import Image
 
+from wechat_ai_publisher.cli import _extract_action_checklist
 from wechat_ai_publisher.config import ImageProviderConfig
 from wechat_ai_publisher.domain.models import (
     Article,
@@ -27,6 +28,34 @@ from wechat_ai_publisher.rendering.theme import load_theme
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def test_extract_action_checklist_uses_longest_numbered_group():
+    markdown = """# 标题
+
+## 数据设置
+
+1. 关闭训练
+2. 删除记录
+3. 检查授权
+
+## 使用前检查
+
+1. **确认身份。** 看清服务对象
+2. **限制权限。** 只开必需范围
+3. **保留日志。** 记录关键操作
+4. **准备退出。** 确保可以撤销
+"""
+
+    assert _extract_action_checklist(markdown) == (
+        "使用前检查",
+        [
+            "确认身份。 看清服务对象",
+            "限制权限。 只开必需范围",
+            "保留日志。 记录关键操作",
+            "准备退出。 确保可以撤销",
+        ],
+    )
+
+
 def test_theme_and_components_use_wechat_compatible_inline_styles():
     theme = load_theme(ROOT / "config" / "themes" / "professional-minimal.yaml")
     plan = VisualPlan(
@@ -46,6 +75,9 @@ def test_theme_and_components_use_wechat_compatible_inline_styles():
 
     assert theme.colors.teal == "#0F9F91"
     assert 'style="' in html
+    assert "background-color:#F4F8F8" in html
+    assert "background-color:#0F9F91" in html
+    assert "border:1px solid" not in html
     assert "class=" not in html
     assert "<svg" not in html
     assert "<script" not in html
@@ -118,7 +150,7 @@ def test_disabled_image_provider_and_atomic_visual_export(tmp_path):
         title="视觉导出测试",
         digest="验证主题 HTML、图片和清单原子导出。",
         markdown="# 视觉导出测试\n\n## 验证步骤\n\n检查导出结果。",
-        author="智效进化社",
+        author="智效进化论",
     )
     writer = DraftWriter(
         tmp_path / "drafts",
@@ -132,6 +164,11 @@ def test_disabled_image_provider_and_atomic_visual_export(tmp_path):
     assert "assets/visual-test-run-1/checklist.png" in html
     assert Path(outputs["cover"]).is_file()
     assert manifest["images"][0]["provider"] == "pillow-template"
+    assert manifest["cover"]["path"] == "assets/visual-test-run-1/cover.png"
+    assert (
+        'src="assets/visual-test-run-1/checklist.png"'
+        in manifest["html_blocks"]["验证步骤"]
+    )
     assert not list((tmp_path / "drafts").glob("*.tmp"))
 
 

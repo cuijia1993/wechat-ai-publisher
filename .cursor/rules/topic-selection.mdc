@@ -1,5 +1,5 @@
 ---
-description: 智效进化社 AI 提效公众号的选题筛选与内容配比规则
+description: 智效进化论 AI 提效公众号的选题筛选与内容配比规则
 globs: topics/**/*.yaml
 alwaysApply: false
 ---

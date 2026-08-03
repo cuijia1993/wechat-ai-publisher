@@ -1,5 +1,5 @@
 id: professional-minimal
-name: 智效进化社专业极简
+name: 智效进化论专业极简
 
 colors:
   navy: "#0B1F3A"
@@ -26,9 +26,9 @@ typography:
   code_size: 13
 
 spacing:
-  page_padding: 20
+  page_padding: 16
   paragraph_margin: 14
-  section_margin: 30
-  block_margin: 20
-  radius: 8
+  section_margin: 36
+  block_margin: 22
+  radius: 10
 

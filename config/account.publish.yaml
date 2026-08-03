@@ -30,12 +30,7 @@ render:
   theme_file: config/themes/professional-minimal.yaml
   generated_assets_dir: assets/generated
   image:
-    provider: dashscope_native
-    model: qwen-image-2.0-pro-2026-06-22
-    endpoint: https://llm-q5islkwwval2g1sf.cn-beijing.maas.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation
-    endpoint_env: IMAGE_API_BASE_URL
-    api_key_env: OPENAI_API_KEY
-    timeout_seconds: 90
+    provider: disabled
 
 quality:
   require_sources: true
@@ -52,10 +47,9 @@ quality:
     - "https?://[^\\s/]+\\.(?:internal|local)\\b"
 
 publish:
-  mode: draft_only
-  dry_run: true
+  mode: wechat_draft
+  dry_run: false
   require_human_approval: true
   auto_publish_after_approval: false
   app_id_env: WECHAT_APP_ID
   app_secret_env: WECHAT_APP_SECRET
-

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import time
 from datetime import UTC, datetime
@@ -22,6 +23,7 @@ from wechat_ai_publisher.domain.models import (
     DiscoveryBatch,
     EditorialReviewResult,
     GateResult,
+    JobManifest,
     ResearchCard,
     ReviewResult,
     Source,
@@ -35,7 +37,7 @@ from wechat_ai_publisher.export.draft_writer import DraftWriter
 from wechat_ai_publisher.providers.image import DisabledImageProvider, ImageProvider
 from wechat_ai_publisher.providers.llm import LLMProvider
 from wechat_ai_publisher.quality.gates import QualityGate
-from wechat_ai_publisher.rendering.components import render_topic_card, render_visual_blocks
+from wechat_ai_publisher.rendering.components import render_visual_blocks
 from wechat_ai_publisher.rendering.template_images import TemplateImageRenderer
 from wechat_ai_publisher.topic.selector import historical_titles, rank_signals
 from wechat_ai_publisher.topic.audit import audit_topic_brief, contains_search_keyword
@@ -81,6 +83,14 @@ class ContentOperationsAgent:
             self.prompts: dict[str, str] = yaml.safe_load(handle) or {}
         self.style_guide = config.content.style_guide.read_text(encoding="utf-8")
         self.project_root = config.content.topic_file.parent.parent
+        self.artifact_root = Path(
+            os.path.commonpath(
+                [
+                    config.content.output_dir.resolve(),
+                    draft_writer.output_dir.resolve(),
+                ]
+            )
+        )
 
     def _directory(self, run_id: str) -> Path:
         return self.config.content.output_dir / f"agent-{run_id}"
@@ -94,6 +104,13 @@ class ContentOperationsAgent:
     def _save_state(self, directory: Path, state: AgentRun) -> None:
         state.updated_at = datetime.now(UTC)
         self._write_model(directory, "agent-state.json", state)
+
+    def _portable_path(self, path: str | Path) -> str:
+        resolved = Path(path).resolve()
+        try:
+            return resolved.relative_to(self.artifact_root).as_posix()
+        except ValueError as exc:
+            raise ValueError(f"发布产物必须位于任务根目录内：{resolved}") from exc
 
     @staticmethod
     def _load(path: str, model_type):
@@ -566,13 +583,11 @@ class ContentOperationsAgent:
                 purpose="微信公众号封面",
                 provider="pillow-template",
             ),
-            html_blocks={
-                "__prelude__": render_topic_card(topic, self.draft_writer.formatter.theme),
-                **render_visual_blocks(visual_plan, self.draft_writer.formatter.theme),
-            },
+            html_blocks=render_visual_blocks(
+                visual_plan, self.draft_writer.formatter.theme
+            ),
         )
 
-        rendered_template_image = False
         for block in visual_plan.blocks:
             image_path: Path | None = None
             provider = "pillow-template"
@@ -593,10 +608,7 @@ class ContentOperationsAgent:
                     provider = self.image_provider.name
                     model = self.image_provider.model
                     source_url = self.image_provider.last_source_url
-            if image_path is None and (
-                block.kind == "concept_image"
-                or (not rendered_template_image and block.kind in {"checklist", "flowchart"})
-            ):
+            if image_path is None and block.kind == "concept_image":
                 image_path = renderer.render_checklist(
                     title=block.title,
                     items=block.items or [block.description],
@@ -604,7 +616,6 @@ class ContentOperationsAgent:
                     brand=self.config.account.name,
                 )
                 provider = "pillow-template-fallback" if block.kind == "concept_image" else "pillow-template"
-                rendered_template_image = True
             if image_path is None:
                 continue
             metadata = AssetMetadata(
@@ -619,7 +630,7 @@ class ContentOperationsAgent:
                 copyright_note=(
                     "由 Qwen-Image 生成，发布前需人工确认内容与版权风险"
                     if provider == "dashscope_native"
-                    else "由智效进化社模板生成"
+                    else "由智效进化论模板生成"
                 ),
             )
             assets.images.append(metadata)
@@ -723,12 +734,32 @@ class ContentOperationsAgent:
 
     def _action_export(self, state: AgentRun, directory: Path) -> tuple[str, dict[str, str]]:
         article = self._load(state.outputs["article"], Article)
+        topic = self._load(state.outputs["topic"], Topic)
         assets = self._load(state.outputs["assets"], ArticleAssets)
         outputs = self.draft_writer.export(article, run_id=state.run_id, assets=assets)
+        manifest = JobManifest(
+            job_id=directory.name,
+            topic_id=topic.id,
+            status="ready_to_publish",
+            model=state.model,
+            prompt_version=state.prompt_version,
+            outputs={
+                "edited": self._portable_path(state.outputs["article"]),
+                "quality_gate": self._portable_path(state.outputs["quality_gate"]),
+                "editorial_review": self._portable_path(state.outputs["editorial_review"]),
+                "visual_review": self._portable_path(state.outputs["visual_review"]),
+                "draft_markdown": self._portable_path(outputs["markdown"]),
+                "draft_html": self._portable_path(outputs["html"]),
+                "visual_manifest": self._portable_path(outputs["visual_manifest"]),
+                "cover": self._portable_path(outputs["cover"]),
+            },
+        )
+        manifest_path = self._write_model(directory, "manifest.json", manifest)
         return "stop", {
             "draft_markdown": outputs["markdown"],
             "draft_html": outputs["html"],
             "visual_manifest": outputs["visual_manifest"],
             "cover": outputs["cover"],
+            "publication_manifest": str(manifest_path),
         }
 

@@ -42,7 +42,7 @@ class ThemeSpacing(BaseModel):
 
 class VisualTheme(BaseModel):
     id: str = "professional-minimal"
-    name: str = "智效进化社专业极简"
+    name: str = "智效进化论专业极简"
     colors: ThemeColors = Field(default_factory=ThemeColors)
     typography: ThemeTypography = Field(default_factory=ThemeTypography)
     spacing: ThemeSpacing = Field(default_factory=ThemeSpacing)

@@ -1,0 +1,84 @@
+name: Generate WeChat Article
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 1 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wechat-article-generation
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install publisher
+        run: pip install -e .
+
+      - name: Validate generation secrets
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: test -n "$OPENAI_API_KEY"
+
+      - name: Generate reviewed article
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: wechat-ai-publisher --config config/account.ci.yaml agent run --draft-only
+
+      - name: Write generation summary
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          manifests = sorted(Path("runtime").glob("agent-*/manifest.json"))
+          states = sorted(Path("runtime").glob("agent-*/agent-state.json"))
+          lines = ["## 微信文章生成结果", ""]
+          if manifests:
+              data = json.loads(manifests[-1].read_text(encoding="utf-8"))
+              lines.extend([
+                  f"- Agent 任务：`{data['job_id']}`",
+                  f"- 状态：`{data['status']}`",
+                  f"- HTML：`{data['outputs']['draft_html']}`",
+                  f"- 质量门禁：`{data['outputs']['quality_gate']}`",
+                  f"- 视觉审查：`{data['outputs']['visual_review']}`",
+              ])
+          elif states:
+              data = json.loads(states[-1].read_text(encoding="utf-8"))
+              lines.extend([
+                  f"- Agent 任务：`agent-{data['run_id']}`",
+                  f"- 状态：`{data['status']}`",
+                  f"- 错误：{data.get('error') or '未生成可发布任务包'}",
+              ])
+          else:
+              lines.append("- 未发现 Agent 运行产物。")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as handle:
+              handle.write("\n".join(lines) + "\n")
+          PY
+
+      - name: Upload article bundle
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: content-agent-${{ github.run_id }}
+          path: |
+            runtime/
+            articles/drafts/
+          if-no-files-found: warn
+          retention-days: 14

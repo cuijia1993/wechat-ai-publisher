@@ -1,4 +1,5 @@
 .env
+config/account.yaml
 .DS_Store
 .idea/
 venv/

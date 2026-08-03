@@ -58,4 +58,3 @@ publish:
   auto_publish_after_approval: false
   app_id_env: WECHAT_APP_ID
   app_secret_env: WECHAT_APP_SECRET
-

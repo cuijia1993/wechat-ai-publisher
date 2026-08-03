@@ -109,3 +109,72 @@ topics:
     score: 1
     status: demo
 
+  - id: ai-resume-fact-check
+    title: AI 写简历把经历优化过头，面试时谁来圆
+    primary_search_keyword: AI 写简历
+    category: 工作与收入
+    target_reader: 使用 AI 修改简历的求职者
+    reader_problem: AI 可能把模糊经历补成无法证明的职责、技能和数字。
+    core_conclusion: AI 可以整理和匹配真实经历，但所有新增事实都必须删除或人工确认。
+    required_evidence:
+      - 招聘方对虚构候选人信息的调查
+      - 明确标注的组合场景
+      - 简历事实核验清单
+    sources:
+      - title: Equifax HR Trends Survey
+        url: https://www.prnewswire.com/news-releases/equifax-survey-three-in-four-hr-professionals-report-challenges-with-fabricated-and-misleading-candidate-information-302836908.html
+        accessed_at: "2026-08-03"
+    verification_records:
+      - 调查样本与适用范围已在正文中说明。
+    product_hook: 简历事实核验提示词
+    score: 96
+    status: selected
+
+  - id: ai-voice-scam-family-verification
+    title: AI 语音诈骗像家人求救，听到这句话先别转账
+    primary_search_keyword: AI 语音诈骗
+    category: 钱与诈骗
+    target_reader: 需要保护自己、老人和家庭资金安全的普通用户
+    reader_problem: AI 克隆声音削弱了熟人来电作为身份凭证的可靠性。
+    core_conclusion: 涉及紧急转账时应挂断、回拨本人常用号码并通过第三人核实。
+    required_evidence:
+      - 监管或警方风险提示
+      - 可执行的多渠道核验步骤
+      - 家庭转账确认规则
+    sources:
+      - title: 国家安全机关 AI 语音风险提示
+        url: https://www.jsjc.gov.cn/yaowen/202607/t20260722_1346066.shtml
+        accessed_at: "2026-08-03"
+      - title: FTC Family Emergency Scam Warning
+        url: https://consumer.ftc.gov/consumer-alerts/2023/03/scammers-use-ai-enhance-their-family-emergency-schemes
+        accessed_at: "2026-08-03"
+    verification_records:
+      - 防骗步骤与公安机关、FTC 公开建议交叉核对。
+    product_hook: 家庭紧急转账核验卡
+    score: 99
+    status: selected
+
+  - id: ai-lab-report-safe-use
+    title: AI 看体检报告把箭头都解释成病，这 4 类结果必须交给医生
+    primary_search_keyword: AI 看体检报告
+    category: 健康与家庭
+    target_reader: 想用 AI 看懂体检或检验报告的普通用户
+    reader_problem: AI 可能脱离症状、病史和用药背景，放大单项异常或给出错误判断。
+    core_conclusion: AI 只用于术语解释、趋势整理和复诊准备，不能替代诊断与用药决定。
+    required_evidence:
+      - 医疗机构对检验结果解释边界的说明
+      - 明确标注的组合场景
+      - 就医与隐私边界清单
+    sources:
+      - title: Quest AI Companion 使用边界
+        url: https://www.questdiagnostics.com/patients/blog/articles/want-a-clearer-understanding-of-your-lab-results
+        accessed_at: "2026-08-03"
+      - title: NHS 血液检查结果解释
+        url: https://www.marriottsmedicalpractices.nhs.uk/clinics/understanding-your-blood-test-results-on-the-nhs-app/
+        accessed_at: "2026-08-03"
+    verification_records:
+      - 医疗建议仅限风险教育，不作个体诊断。
+    product_hook: 体检报告安全提问模板
+    score: 98
+    status: selected
+

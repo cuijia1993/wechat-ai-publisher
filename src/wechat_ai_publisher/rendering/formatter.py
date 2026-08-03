@@ -13,6 +13,9 @@ IMAGE_PATTERN = re.compile(r'<img\b[^>]*\bsrc="([^"]+)"[^>]*>')
 CODE_PATTERN = re.compile(r"<pre><code(?:\s[^>]*)?>(.*?)</code></pre>", re.DOTALL)
 LIST_PATTERN = re.compile(r"<(ul|ol)>(.*?)</\1>", re.DOTALL)
 ITEM_PATTERN = re.compile(r"<li>(.*?)</li>", re.DOTALL)
+REFERENCE_HEADING_PATTERN = re.compile(
+    r"<h3>\s*(?:参考资料|参考来源)\s*</h3>\s*$", re.IGNORECASE
+)
 
 
 class WechatFormatter:
@@ -50,6 +53,33 @@ class WechatFormatter:
         def replace(match: re.Match[str]) -> str:
             ordered = match.group(1) == "ol"
             items = ITEM_PATTERN.findall(match.group(2))
+            is_reference_list = bool(
+                ordered and REFERENCE_HEADING_PATTERN.search(body[: match.start()])
+            )
+            if ordered and len(items) >= 3 and not is_reference_list:
+                rows = []
+                for index, item in enumerate(items, start=1):
+                    border = (
+                        ""
+                        if index == 1
+                        else f"border-top:1px solid {colors.border};"
+                    )
+                    rows.append(
+                        "<tr>"
+                        f'<td style="width:38px;padding:14px 4px;vertical-align:top;{border}">'
+                        f'<span style="display:inline-block;width:28px;height:28px;line-height:28px;'
+                        f'text-align:center;background-color:{colors.teal};color:{colors.white};'
+                        f'border-radius:14px;font-size:13px;font-weight:bold;">{index}</span></td>'
+                        f'<td style="padding:14px 0 14px 8px;color:{colors.text};font-size:15px;'
+                        f'line-height:1.75;vertical-align:top;{border}">{item}</td>'
+                        "</tr>"
+                    )
+                return (
+                    f'<section style="margin:{spacing.block_margin}px 0;padding:4px 16px;'
+                    f'background-color:{colors.surface};border-radius:{spacing.radius}px;">'
+                    f'<table style="width:100%;border-collapse:collapse;">{"".join(rows)}</table>'
+                    "</section>"
+                )
             rows = []
             for index, item in enumerate(items, start=1):
                 marker = f"{index}." if ordered else "•"
@@ -62,6 +92,39 @@ class WechatFormatter:
             return f'<section style="margin:{spacing.paragraph_margin}px 0;">{"".join(rows)}</section>'
 
         return LIST_PATTERN.sub(replace, body)
+
+    def _render_lead(self, body: str) -> str:
+        colors = self.theme.colors
+        spacing = self.theme.spacing
+
+        def replace(match: re.Match[str]) -> str:
+            return (
+                f'<section style="margin:4px 0 {spacing.block_margin + 4}px;padding:20px 18px;'
+                f'background-color:{colors.navy};border-radius:{spacing.radius}px;">'
+                f'<p style="margin:0;color:{colors.white};font-size:17px;line-height:1.75;'
+                f'font-weight:bold;">{match.group(1)}</p></section>'
+            )
+
+        return re.sub(r"<p>(.*?)</p>", replace, body, count=1, flags=re.DOTALL)
+
+    def _render_section_headings(self, body: str) -> str:
+        colors = self.theme.colors
+        typography = self.theme.typography
+        spacing = self.theme.spacing
+        section_number = 0
+
+        def replace(match: re.Match[str]) -> str:
+            nonlocal section_number
+            section_number += 1
+            return (
+                f'<p style="margin:{spacing.section_margin}px 0 4px;color:{colors.teal};'
+                f'font-size:{typography.note_size}px;font-weight:bold;letter-spacing:0.12em;">'
+                f"{section_number:02d} /</p>"
+                f'<h2 style="font-size:{typography.h2_size}px;line-height:1.5;margin:0 0 14px;'
+                f'color:{colors.navy};font-weight:bold;">{match.group(1)}</h2>'
+            )
+
+        return re.sub(r"<h2>(.*?)</h2>", replace, body, flags=re.DOTALL)
 
     @staticmethod
     def _inject_blocks(body: str, blocks: dict[str, str]) -> str:
@@ -89,17 +152,14 @@ class WechatFormatter:
         body = markdown.markdown(source, extensions=["fenced_code", "tables", "sane_lists"])
         body = self._render_code_blocks(body)
         body = self._render_lists(body)
+        body = self._render_lead(body)
+        body = self._render_section_headings(body)
         if not include_h1:
             body = re.sub(r"<h1>.*?</h1>", "", body, count=1, flags=re.DOTALL)
         replacements = {
             "<h1>": (
                 f'<h1 style="font-size:{typography.h1_size}px;line-height:1.45;'
                 f'margin:{spacing.section_margin}px 0 18px;color:{colors.navy};font-weight:bold;">'
-            ),
-            "<h2>": (
-                f'<h2 style="font-size:{typography.h2_size}px;line-height:1.55;'
-                f'margin:{spacing.section_margin}px 0 14px;color:{colors.navy};font-weight:bold;'
-                f'border-left:4px solid {colors.teal};padding-left:12px;">'
             ),
             "<h3>": (
                 f'<h3 style="font-size:{typography.h3_size}px;line-height:1.6;'

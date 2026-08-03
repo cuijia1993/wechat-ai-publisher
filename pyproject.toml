@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "wechat-ai-publisher"
 version = "0.1.0"
-description = "智效进化社微信公众号 AI 内容生产与草稿发布流水线"
+description = "智效进化论微信公众号 AI 内容生产与草稿发布流水线"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

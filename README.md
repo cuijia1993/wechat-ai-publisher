@@ -1,4 +1,4 @@
-# 智效进化社：微信公众号 AI 发布框架
+# 智效进化论：微信公众号 AI 发布框架
 
 一个面向普通读者的安全优先内容运营 Agent：寻找 AI 对工作、钱包、安全、健康、家庭与生活选择的真实影响，
 完成选题、调研、故事化写作、审查修订和视觉制作，最终导出本地 Markdown/HTML 草稿。
@@ -122,16 +122,35 @@ wechat-ai-publisher publish --job <job_id> --dry-run
 1. 在公众号后台确认 `media/uploadimg`、`material/add_material`、`draft/add` 权限。
 2. 设置 `WECHAT_APP_ID`、`WECHAT_APP_SECRET`。
 3. 将 `config/account.yaml` 中 `publish.dry_run` 改为 `false`。
-4. 准备本地封面，人工审核后执行：
+4. 人工审核后执行；Agent 终稿会从视觉清单自动读取封面，也可用 `--cover` 覆盖：
 
 ```bash
 wechat-ai-publisher publish \
   --job <job_id> \
-  --approved \
-  --cover assets/covers/cover.jpg
+  --approved
 ```
 
-真实上传同时满足以下条件才会执行：质量门禁通过、配置关闭 dry-run、提供 `--approved`、封面存在、微信凭据完整。任务目录已有成功的 `publish-result.json` 时会直接返回原结果，避免重复创建草稿。
+真实上传同时满足以下条件才会执行：质量门禁通过、配置关闭 dry-run、提供 `--approved`、视觉清单或参数指定的封面存在、微信凭据完整。任务目录已有成功的 `publish-result.json` 时会直接返回原结果，避免重复创建草稿。
+
+## 获取发布后数据
+
+认证公众号可使用微信“获取发表内容发表详细数据”接口。配置
+`WECHAT_APP_ID`、`WECHAT_APP_SECRET` 后执行：
+
+```bash
+# 拉取指定发表日期的数据；微信最多返回到昨天
+wechat-ai-publisher analytics fetch --date 2026-07-30
+
+# 拉取最近 30 个发表日期，并保存到 runtime/analytics/
+wechat-ai-publisher analytics fetch --days 30
+
+# 汇总已经拉取到本地的数据
+wechat-ai-publisher analytics report --days 30
+```
+
+报告包含阅读人数、分享、点赞、在看、收藏、留言、阅读后关注和赞赏金额等指标。
+详细接口仅支持 2025-11-01 及之后发表的内容，每篇文章最多统计发表后 30 天；数据可能延迟，
+应保留接口返回的 `is_delay` 标记。未认证或没有“群发与通知”权限的公众号无法调用。
 
 ## 目录
 
@@ -145,21 +164,30 @@ templates/              微信 HTML 预览模板
 runtime/agent-<run_id>/ Agent 状态、来源、选题、审稿与门禁产物
 src/wechat_ai_publisher 业务代码
 tests/                  单元测试和 dry-run 端到端测试
-workflows/              GitHub Actions 模板
+.github/workflows/      GitHub Actions 生成与审批发布
+workflows/              旧版工作流模板
 ```
 
 每个任务都有唯一 ID。Agent 的 `agent-state.json` 记录逐步状态、模型、提示词版本、耗时和产物；证据不足、修订超限或质量门禁失败时会停止，不会导出为可发布草稿。
 
 ## GitHub Actions
 
-确认选题证据、模型配置和 Secrets 后，将模板复制到 GitHub 工作流目录：
+工作流分成两个安全边界：
 
-```bash
-mkdir -p .github/workflows
-cp workflows/generate.yml .github/workflows/generate.yml
-```
+- `.github/workflows/generate.yml` 在 GitHub hosted runner 自动选题、生成、审稿和渲染，上传保留 14 天的可移植 Artifact；它只需要模型密钥，不接触微信凭据。
+- `.github/workflows/publish.yml` 只允许手动触发。指定生成工作流的 `run ID` 后，经 `wechat-draft` Environment 人工审批，在固定 IP 的 self-hosted runner 创建微信草稿。
 
-需要配置 `OPENAI_API_KEY`，自定义服务还需配置 `OPENAI_BASE_URL`。工作流使用 GitHub 自带 Token 读取 Release，只生成并保存本地草稿产物，不包含微信凭据，不上传或发布微信文章。
+仓库设置：
+
+1. 在 Repository Secrets 配置 `OPENAI_API_KEY`；自定义兼容服务时再配置 `OPENAI_BASE_URL`。
+2. 新建 GitHub Environment `wechat-draft`，设置至少一名 required reviewer，并只在该 Environment 中保存 `WECHAT_APP_ID`、`WECHAT_APP_SECRET`。
+3. 为本仓库注册 self-hosted runner，添加 `wechat-publisher` 标签。runner 应使用独立低权限系统账号和固定出口 IP，并把该 IP 加入公众号后台白名单。
+4. 手动运行一次 `Generate WeChat Article`。下载 `content-agent-<run_id>`，审阅 HTML、`quality-gate.json`、主编审查和视觉审查结果。
+5. 运行 `Publish WeChat Draft`，输入上一步页面 URL 中的 GitHub `run ID`，再由 Environment reviewer 批准发布 Job。
+
+生成 Artifact 必须恰好包含一个 `ready_to_publish` Manifest；发布工作流不会按修改时间猜测“最新文章”。任务包内路径均为相对路径，可在两类 runner 之间迁移。发布收据保留 7 天，同一任务再次执行会读取 `publish-result.json`，不会重复创建草稿。
+
+首次接入先使用测试文章验收图片、排版和公众号接口权限，确认无误后再保留每周一北京时间 09:00 的定时生成。不要在 GitHub hosted runner 上放置微信密钥；其动态出口 IP 不适合作为公众号白名单地址。
 
 ## 当前边界
 
@@ -167,6 +195,6 @@ cp workflows/generate.yml .github/workflows/generate.yml
 - 自动调研仅限配置的官方 RSS/Atom 和 GitHub Release；未接入开放式全网搜索。
 - 未自动编译文章中的任意代码，也不会把官方发布说明等同于真实项目验证。
 - 外部生图只用于无人物、无商标的概念插画；运行结果和产品界面仍必须使用真实截图。
-- 未实现发布后指标采集和自动群发。
+- 未实现自动群发；发布后指标可由 `analytics fetch` 手工或定时拉取。
 - 外部 API 测试均使用 mock，首次真实接入必须用测试文章完成公众号后台验收。
 
