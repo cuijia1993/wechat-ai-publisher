@@ -8,6 +8,7 @@ model:
   base_url: https://llm-q5islkwwval2g1sf.cn-beijing.maas.aliyuncs.com/compatible-mode/v1
   base_url_env: OPENAI_BASE_URL
   api_key_env: OPENAI_API_KEY
+  supports_vision: false
   temperature: 0.3
   max_retries: 3
 
@@ -30,7 +31,7 @@ render:
   theme_file: config/themes/professional-minimal.yaml
   generated_assets_dir: assets/generated
   image:
-    provider: dashscope_native
+    provider: disabled
     model: qwen-image-2.0-pro-2026-06-22
     endpoint: https://llm-q5islkwwval2g1sf.cn-beijing.maas.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation
     endpoint_env: IMAGE_API_BASE_URL

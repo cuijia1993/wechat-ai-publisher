@@ -113,6 +113,18 @@ class ContentOperationsAgent:
             raise ValueError(f"发布产物必须位于任务根目录内：{resolved}") from exc
 
     @staticmethod
+    def _revision_bucket(role: str) -> str:
+        if role == "quality_gate":
+            return "quality_gate"
+        if role == "editorial_reviewer":
+            return "editorial_review"
+        return "content_review"
+
+    @staticmethod
+    def _revision_count(state: AgentRun, bucket: str) -> int:
+        return state.revision_counts.get(bucket, 0)
+
+    @staticmethod
     def _load(path: str, model_type):
         return model_type.model_validate_json(Path(path).read_text(encoding="utf-8"))
 
@@ -160,6 +172,18 @@ class ContentOperationsAgent:
             step = AgentStep(action=action, status="running")
             state.steps.append(step)
             self._save_state(directory, state)
+            print(
+                json.dumps(
+                    {
+                        "event": "step_started",
+                        "run_id": state.run_id,
+                        "action": action,
+                        "step": len(state.steps),
+                    },
+                    ensure_ascii=False,
+                ),
+                flush=True,
+            )
             started = time.monotonic()
             try:
                 next_action, outputs = self._execute(action, state, directory)
@@ -177,6 +201,21 @@ class ContentOperationsAgent:
                 step.finished_at = datetime.now(UTC)
                 step.duration_ms = round((time.monotonic() - started) * 1000)
                 self._save_state(directory, state)
+                print(
+                    json.dumps(
+                        {
+                            "event": "step_finished",
+                            "run_id": state.run_id,
+                            "action": action,
+                            "status": step.status,
+                            "duration_ms": step.duration_ms,
+                            "next_action": state.next_action,
+                            "error": step.error,
+                        },
+                        ensure_ascii=False,
+                    ),
+                    flush=True,
+                )
             if state.status == "failed":
                 return state
 
@@ -448,7 +487,7 @@ class ContentOperationsAgent:
         path = self._write_model(directory, f"review-{state.revision_count}.json", review)
         if review.passed:
             return "gate", {"review": str(path)}
-        if state.revision_count >= state.max_revisions:
+        if self._revision_count(state, "content_review") >= state.max_revisions:
             state.status = "blocked"
             state.error = "审查未通过且已达到最大修订次数"
             return "stop", {"review": str(path)}
@@ -457,7 +496,9 @@ class ContentOperationsAgent:
     def _action_revise(self, state: AgentRun, directory: Path) -> tuple[str, dict[str, str]]:
         article = self._load(state.outputs["article"], Article)
         review = self._load(state.outputs["review"], ReviewResult)
+        bucket = self._revision_bucket(review.role)
         state.revision_count += 1
+        state.revision_counts[bucket] = self._revision_count(state, bucket) + 1
         if review.revised_markdown:
             article.markdown = review.revised_markdown
         else:
@@ -492,7 +533,7 @@ class ContentOperationsAgent:
         path = self._write_model(directory, "quality-gate.json", result)
         if result.passed:
             return "editorial_review", {"quality_gate": str(path)}
-        if state.revision_count >= state.max_revisions:
+        if self._revision_count(state, "quality_gate") >= state.max_revisions:
             state.status = "blocked"
             state.error = "质量门禁未通过且已达到最大修订次数"
             return "stop", {"quality_gate": str(path)}
@@ -537,7 +578,7 @@ class ContentOperationsAgent:
         )
         if accepted:
             return "render_assets", {"editorial_review": str(path)}
-        if state.revision_count >= state.max_revisions:
+        if self._revision_count(state, "editorial_review") >= state.max_revisions:
             state.status = "blocked"
             state.error = "发布前主编审查未通过且已达到最大修订次数"
             return "stop", {"editorial_review": str(path)}
@@ -698,23 +739,36 @@ class ContentOperationsAgent:
         visual_plan = self._load(state.outputs["visual_plan"], VisualPlan)
         assets = self._load(state.outputs["assets"], ArticleAssets)
         image_paths, deterministic_findings = self._inspect_visual_assets(assets)
-        review = self.provider.structured_with_images(
-            system=self.prompts["visual_reviewer"],
-            user=json.dumps(
-                {
-                    "article": article.model_dump(mode="json"),
-                    "visual_plan": visual_plan.model_dump(mode="json"),
-                    "assets": assets.model_dump(mode="json"),
-                    "image_order": [str(path) for path in image_paths],
-                    "deterministic_findings": deterministic_findings,
-                    "style_guide": self.style_guide,
-                    "minimum_overall_score": self.config.quality.visual_min_score,
-                },
-                ensure_ascii=False,
-            ),
-            image_paths=image_paths,
-            response_model=VisualReviewResult,
+        review_payload = json.dumps(
+            {
+                "review_mode": (
+                    "multimodal"
+                    if self.config.model.supports_vision
+                    else "metadata_and_deterministic_checks"
+                ),
+                "article": article.model_dump(mode="json"),
+                "visual_plan": visual_plan.model_dump(mode="json"),
+                "assets": assets.model_dump(mode="json"),
+                "image_order": [str(path) for path in image_paths],
+                "deterministic_findings": deterministic_findings,
+                "style_guide": self.style_guide,
+                "minimum_overall_score": self.config.quality.visual_min_score,
+            },
+            ensure_ascii=False,
         )
+        if self.config.model.supports_vision:
+            review = self.provider.structured_with_images(
+                system=self.prompts["visual_reviewer"],
+                user=review_payload,
+                image_paths=image_paths,
+                response_model=VisualReviewResult,
+            )
+        else:
+            review = self.provider.structured(
+                system=self.prompts["visual_reviewer"],
+                user=review_payload,
+                response_model=VisualReviewResult,
+            )
         if deterministic_findings:
             review.passed = False
             review.issues = list(dict.fromkeys([*deterministic_findings, *review.issues]))

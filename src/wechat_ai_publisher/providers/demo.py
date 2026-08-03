@@ -228,6 +228,17 @@ class DemoProvider:
                     "readability": 9,
                 },
             )
+        elif response_model is VisualReviewResult:
+            value = VisualReviewResult(
+                passed=True,
+                overall_score=9,
+                scores={
+                    "content_consistency": 9,
+                    "information_value": 9,
+                    "legibility": 9,
+                    "visual_consistency": 9,
+                },
+            )
         else:
             raise TypeError(f"演示模型不支持响应类型：{response_model.__name__}")
         return value  # type: ignore[return-value]

@@ -26,10 +26,11 @@ RUNTIME_ASSERTION_PATTERN = re.compile(
 )
 RUNTIME_EVIDENCE_KINDS = {"runtime_log", "benchmark", "manual_verification"}
 EXAMPLE_PATTERN = re.compile(r"例如|比如|示例|输入|输出|原文|改写前|改写后|提示词|清单")
-TWIST_PATTERN = re.compile(r"却|没想到|失败|遗漏|返工|出错|错误|不准确|人工修改|最后发现")
+TWIST_PATTERN = re.compile(
+    r"却|没想到|失败|意外|遗漏|返工|出错|错误|不准确|人工修改|最后发现"
+)
 EXAMPLE_REQUIRED_CONTENT_TYPES = {
     "workplace_guide",
-    "life_idea",
     "team_workflow",
     "case_study",
     "tutorial",

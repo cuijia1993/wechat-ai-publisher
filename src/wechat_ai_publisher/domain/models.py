@@ -285,6 +285,7 @@ class AgentRun(BaseModel):
     steps: list[AgentStep] = Field(default_factory=list)
     outputs: dict[str, str] = Field(default_factory=dict)
     revision_count: int = 0
+    revision_counts: dict[str, int] = Field(default_factory=dict)
     max_revisions: int = 2
     max_steps: int = 16
     error: str | None = None

@@ -20,6 +20,7 @@ class ModelConfig(BaseModel):
     base_url: str | None = None
     base_url_env: str = "OPENAI_BASE_URL"
     api_key_env: str = "OPENAI_API_KEY"
+    supports_vision: bool = False
     temperature: float = 0.3
     max_retries: int = 3
 

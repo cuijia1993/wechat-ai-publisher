@@ -214,6 +214,44 @@ def test_incident_review_does_not_require_fictional_story_or_input_output():
     }
 
 
+def test_life_idea_does_not_require_a_failure_twist():
+    broad_topic = topic()
+    broad_topic.audience_scope = "broad_public"
+    broad_topic.title_angle = "problem_first"
+    broad_topic.primary_search_keyword = "Java AI"
+    broad_topic.content_type = "life_idea"
+    without_twist = (
+        VALID_MARKDOWN.replace("失败", "风险")
+        .replace("错误", "偏差")
+        .replace("但", "同时")
+    )
+
+    result = QualityGate(QualityConfig()).check(article(without_twist), broad_topic)
+
+    assert result.passed
+    assert "missing_example_elements" not in {
+        item.code for item in result.findings
+    }
+
+
+def test_workplace_guide_accepts_an_explicit_accident_as_twist():
+    broad_topic = topic()
+    broad_topic.audience_scope = "knowledge_worker"
+    broad_topic.title_angle = "problem_first"
+    broad_topic.primary_search_keyword = "Java AI"
+    broad_topic.content_type = "workplace_guide"
+    with_accident = (
+        VALID_MARKDOWN.replace("失败", "风险")
+        .replace("错误", "偏差")
+        .replace("但", "同时")
+        + "\n\n执行过程中出现意外，需要人工确认后再采用。"
+    )
+
+    result = QualityGate(QualityConfig()).check(article(with_accident), broad_topic)
+
+    assert result.passed
+
+
 def test_template_style_is_reported_as_warning_without_blocking():
     templated = article(
         """# 一套可复现的 Java AI 验证流程

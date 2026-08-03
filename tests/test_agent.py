@@ -7,6 +7,7 @@ from wechat_ai_publisher.config import SourcesConfig, load_config
 from wechat_ai_publisher.discovery.client import DiscoveryClient
 from wechat_ai_publisher.domain.models import (
     EditorialReviewResult,
+    GateResult,
     ResearchCard,
     ReviewResult,
     SourceSignal,
@@ -17,6 +18,7 @@ from wechat_ai_publisher.domain.models import (
 )
 from wechat_ai_publisher.export.draft_writer import DraftWriter
 from wechat_ai_publisher.providers.demo import DemoProvider
+from wechat_ai_publisher.quality.gates import QualityGate
 from wechat_ai_publisher.rendering.formatter import WechatFormatter
 
 
@@ -190,6 +192,52 @@ def test_agent_applies_review_revision_and_rechecks(tmp_path):
     assert "仅用于验证 Agent 工作流" in Path(state.outputs["draft_markdown"]).read_text(encoding="utf-8")
 
 
+class GateThenReviewerRevisionProvider(DemoProvider):
+    def __init__(self):
+        self.review_count = 0
+
+    def structured(self, *, system: str, user: str, response_model):
+        if response_model is ReviewResult:
+            self.review_count += 1
+            if self.review_count == 1:
+                return ReviewResult(role="reviewer", passed=True)
+            if self.review_count == 2:
+                article = json.loads(user)["article"]
+                return ReviewResult(
+                    role="reviewer",
+                    passed=False,
+                    issues=["修正门禁反馈后仍有一处内容问题"],
+                    revised_markdown=article["markdown"] + "\n\n补充人工确认边界。",
+                )
+            return ReviewResult(role="reviewer", passed=True)
+        return super().structured(system=system, user=user, response_model=response_model)
+
+
+def test_revision_limits_are_tracked_per_review_stage(tmp_path, monkeypatch):
+    gate_calls = 0
+
+    def staged_gate(self, article, topic, *, historical_titles=None):
+        nonlocal gate_calls
+        gate_calls += 1
+        return GateResult(
+            passed=gate_calls > 1,
+            findings=[] if gate_calls > 1 else [],
+        )
+
+    monkeypatch.setattr(QualityGate, "check", staged_gate)
+    agent = build_agent(tmp_path, GateThenReviewerRevisionProvider())
+    agent.config.agent.max_steps = 24
+
+    state = agent.run()
+
+    assert state.status == "completed"
+    assert state.revision_count == 2
+    assert state.revision_counts == {
+        "quality_gate": 1,
+        "content_review": 1,
+    }
+
+
 class EditorialRevisionOnceProvider(DemoProvider):
     def __init__(self):
         self.editorial_review_count = 0
@@ -241,7 +289,9 @@ class RejectVisualProvider(DemoProvider):
 
 
 def test_visual_reviewer_blocks_export(tmp_path):
-    state = build_agent(tmp_path, RejectVisualProvider()).run()
+    agent = build_agent(tmp_path, RejectVisualProvider())
+    agent.config.model.supports_vision = True
+    state = agent.run()
 
     assert state.status == "blocked"
     assert state.next_action == "stop"
@@ -249,6 +299,21 @@ def test_visual_reviewer_blocks_export(tmp_path):
     assert "visual_review" in state.outputs
     assert "draft_markdown" not in state.outputs
     assert "publication_manifest" not in state.outputs
+
+
+class TextOnlyVisualProvider(DemoProvider):
+    def structured_with_images(self, **kwargs):
+        raise AssertionError("文本模型不应收到图片消息")
+
+
+def test_text_only_model_uses_metadata_visual_review(tmp_path):
+    agent = build_agent(tmp_path, TextOnlyVisualProvider())
+    agent.config.model.supports_vision = False
+
+    state = agent.run()
+
+    assert state.status == "completed"
+    assert Path(state.outputs["visual_review"]).is_file()
 
 
 class ConceptVisualProvider(DemoProvider):
