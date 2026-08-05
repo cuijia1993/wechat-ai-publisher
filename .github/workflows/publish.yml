@@ -139,12 +139,14 @@ jobs:
           WECHAT_APP_SECRET: ${{ secrets.WECHAT_APP_SECRET }}
         run: test -n "$WECHAT_APP_ID" && test -n "$WECHAT_APP_SECRET"
 
-      - name: Install Chinese fonts
+      - name: Ensure Chinese font without sudo
         run: |
-          if command -v apt-get >/dev/null; then
-            sudo apt-get update -qq
-            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq fonts-noto-cjk
-          fi
+          python3 - <<'PY'
+          from wechat_ai_publisher.rendering.template_images import ensure_cjk_font
+
+          path = ensure_cjk_font(bold=True)
+          print("using font", path)
+          PY
 
       - name: Rerender cover with local Chinese fonts
         env:
@@ -159,7 +161,7 @@ jobs:
           from wechat_ai_publisher.domain.models import Article, Topic, VisualPlan
           from wechat_ai_publisher.rendering.template_images import (
               TemplateImageRenderer,
-              resolve_cjk_font_path,
+              ensure_cjk_font,
           )
           from wechat_ai_publisher.rendering.theme import load_theme
 
@@ -178,7 +180,7 @@ jobs:
               (agent_dir / "visual-plan.json").read_text(encoding="utf-8")
           )
           config = load_config(Path("config/account.publish.yaml"))
-          print("using font", resolve_cjk_font_path(bold=True))
+          print("using font", ensure_cjk_font(bold=True))
           TemplateImageRenderer(load_theme(config.render.theme_file)).render_cover(
               title=article.title,
               subtitle=visual_plan.cover_subtitle,

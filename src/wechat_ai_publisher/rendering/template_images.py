@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import re
+import shutil
+import tempfile
+import urllib.request
 from functools import lru_cache
 from pathlib import Path
 
@@ -9,10 +12,27 @@ from PIL import Image, ImageDraw, ImageFont
 from wechat_ai_publisher.rendering.theme import VisualTheme
 
 _BUNDLE_DIR = Path(__file__).resolve().parent / "fonts"
+_USER_FONT_DIR = Path.home() / ".local" / "share" / "fonts" / "wechat-ai-publisher"
+
+_FONT_DOWNLOAD_CANDIDATES = [
+    # Debian 包内含 wqy-microhei，国内镜像可无 sudo 解压。
+    (
+        "https://mirrors.aliyun.com/debian/pool/main/f/fonts-wqy-microhei/"
+        "fonts-wqy-microhei_0.2.0-beta-3.1_all.deb",
+        "wqy-microhei.ttc",
+    ),
+    (
+        "https://mirrors.tuna.tsinghua.edu.cn/debian/pool/main/f/fonts-wqy-microhei/"
+        "fonts-wqy-microhei_0.2.0-beta-3.1_all.deb",
+        "wqy-microhei.ttc",
+    ),
+]
 
 _REGULAR_FONT_CANDIDATES = [
     _BUNDLE_DIR / "NotoSansSC-Regular.otf",
     _BUNDLE_DIR / "NotoSansCJKsc-Regular.otf",
+    _BUNDLE_DIR / "wqy-microhei.ttc",
+    _USER_FONT_DIR / "wqy-microhei.ttc",
     Path("/System/Library/Fonts/PingFang.ttc"),
     Path("/System/Library/Fonts/STHeiti Light.ttc"),
     Path("/Library/Fonts/Arial Unicode.ttf"),
@@ -38,21 +58,70 @@ _BOLD_FONT_CANDIDATES = [
 ]
 
 
-@lru_cache(maxsize=1)
-def resolve_cjk_font_path(*, bold: bool = False) -> Path:
+def _find_existing_font(*, bold: bool = False) -> Path | None:
     candidates = _BOLD_FONT_CANDIDATES if bold else _REGULAR_FONT_CANDIDATES
     for candidate in candidates:
         if candidate.is_file():
             return candidate
-    searched = ", ".join(str(path) for path in candidates[:8])
+    return None
+
+
+def _download_wqy_microhei(destination: Path) -> Path:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    last_error: Exception | None = None
+    for url, font_name in _FONT_DOWNLOAD_CANDIDATES:
+        try:
+            with tempfile.TemporaryDirectory(prefix="cjk-font-") as tmp:
+                tmp_dir = Path(tmp)
+                deb_path = tmp_dir / "font.deb"
+                with urllib.request.urlopen(url, timeout=60) as response:
+                    deb_path.write_bytes(response.read())
+                extract_dir = tmp_dir / "extract"
+                extract_dir.mkdir()
+                # dpkg-deb 无需 root，适合无 sudo 的 self-hosted runner。
+                import subprocess
+
+                subprocess.run(
+                    ["dpkg-deb", "-x", str(deb_path), str(extract_dir)],
+                    check=True,
+                    capture_output=True,
+                )
+                matches = list(extract_dir.rglob(font_name))
+                if not matches:
+                    raise FileNotFoundError(f"deb 中未找到 {font_name}")
+                shutil.copy2(matches[0], destination)
+                return destination
+        except Exception as exc:  # noqa: BLE001 - 尝试下一个镜像
+            last_error = exc
     raise FileNotFoundError(
-        "未找到可用中文字体，封面会乱码。请安装 fonts-noto-cjk，"
-        f"或将字体放到 {_BUNDLE_DIR}。已尝试：{searched}"
+        f"无法下载中文字体到 {destination}：{last_error}"
+    )
+
+
+def ensure_cjk_font(*, bold: bool = False) -> Path:
+    """返回可用中文字体；若系统未安装则下载到用户可写目录。"""
+    existing = _find_existing_font(bold=bold)
+    if existing is not None:
+        return existing
+    downloaded = _download_wqy_microhei(_USER_FONT_DIR / "wqy-microhei.ttc")
+    resolve_cjk_font_path.cache_clear()
+    return downloaded
+
+
+@lru_cache(maxsize=1)
+def resolve_cjk_font_path(*, bold: bool = False) -> Path:
+    existing = _find_existing_font(bold=bold)
+    if existing is not None:
+        return existing
+    searched = ", ".join(str(path) for path in _REGULAR_FONT_CANDIDATES[:8])
+    raise FileNotFoundError(
+        "未找到可用中文字体，封面会乱码。请调用 ensure_cjk_font()，"
+        f"或将字体放到 {_BUNDLE_DIR} / {_USER_FONT_DIR}。已尝试：{searched}"
     )
 
 
 def _font(size: int, *, bold: bool = False):
-    path = resolve_cjk_font_path(bold=bold)
+    path = ensure_cjk_font(bold=bold)
     try:
         return ImageFont.truetype(str(path), size=size, index=0)
     except OSError:

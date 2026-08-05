@@ -204,7 +204,7 @@ workflows/              旧版工作流模板
 1. 在 Repository Secrets 配置 `OPENAI_API_KEY`；自定义兼容服务时再配置 `OPENAI_BASE_URL`。
 2. 新建 GitHub Environment `topic-approval`，设置至少一名 required reviewer；候选生成后先在工作流 Summary 查看标题、读者问题、核心结论、可复制资产和官方来源，再批准继续写作。该 Environment 不需要保存密钥。
 3. 新建 GitHub Environment `wechat-draft`，设置至少一名 required reviewer，并只在该 Environment 中保存 `WECHAT_APP_ID`、`WECHAT_APP_SECRET`。
-4. 为本仓库注册 self-hosted runner，添加 `wechat-publisher` 标签。runner 应使用独立低权限系统账号和固定出口 IP，并把该 IP 加入公众号后台白名单；机器上预先安装 Python 3.11+（`python3`/`pip` 在 PATH 中可用），发布工作流不再联网下载解释器。发布机还需能安装中文字体（`fonts-noto-cjk`），否则封面标题会显示为方框乱码；工作流会在发布前用本机字体重绘封面。
+4. 为本仓库注册 self-hosted runner，添加 `wechat-publisher` 标签。runner 应使用独立低权限系统账号和固定出口 IP，并把该 IP 加入公众号后台白名单；机器上预先安装 Python 3.11+（`python3`/`pip` 在 PATH 中可用），发布工作流不再联网下载解释器。发布机无需 sudo：若缺少中文字体，工作流会把文泉驿微米黑下载到用户目录并在上传前重绘封面。
 5. 手动运行一次 `Generate WeChat Article`，先批准选题；完成后下载 `content-agent-<run_id>`，审阅 HTML、`quality-gate.json`、主编审查和视觉审查结果。
 6. 运行 `Publish WeChat Draft`，输入上一步页面 URL 中的 GitHub `run ID`，再由 `wechat-draft` Environment reviewer 批准发布 Job。
 
