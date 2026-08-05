@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  actions: write
 
 concurrency:
   group: wechat-article-generation
@@ -94,6 +95,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     environment: topic-approval
+    permissions:
+      contents: read
+      actions: read
     steps:
       - uses: actions/checkout@v4
 
@@ -108,8 +112,42 @@ jobs:
       - name: Download approved topic candidate
         uses: actions/download-artifact@v4
         with:
+          # upload path 是 runtime/ 时，artifact 根目录是其内容（agent-*/），需还原到 runtime/
           name: topic-candidate-${{ github.run_id }}
-          path: .
+          path: runtime
+
+      - name: Verify restored Agent task
+        env:
+          AGENT_RUN_ID: ${{ needs.select-topic.outputs.agent_run_id }}
+        run: |
+          python - <<'PY'
+          import os
+          import shutil
+          from pathlib import Path
+
+          run_id = os.environ["AGENT_RUN_ID"]
+          expected = Path("runtime") / f"agent-{run_id}"
+          state_path = expected / "agent-state.json"
+          candidates = [
+              Path("agent-" + run_id),
+              Path("runtime") / "runtime" / f"agent-{run_id}",
+          ]
+          if not state_path.is_file():
+              for candidate in candidates:
+                  if (candidate / "agent-state.json").is_file():
+                      expected.parent.mkdir(parents=True, exist_ok=True)
+                      if expected.exists():
+                          shutil.rmtree(expected)
+                      shutil.move(str(candidate), str(expected))
+                      break
+          if not state_path.is_file():
+              listing = sorted(str(path) for path in Path(".").rglob("agent-state.json"))[:20]
+              raise SystemExit(
+                  "恢复选题任务失败："
+                  f"缺少 {state_path}；找到的 agent-state.json：{listing or ['<none>']}"
+              )
+          print(f"restored {state_path}")
+          PY
 
       - name: Record topic approval
         run: |
@@ -143,22 +181,27 @@ jobs:
 
           run_id = os.environ["AGENT_RUN_ID"]
           state_path = Path("runtime") / f"agent-{run_id}" / "agent-state.json"
-          state = json.loads(state_path.read_text(encoding="utf-8"))
           lines = [
               "## 微信文章生成结果",
               "",
               f"- Agent 任务：`agent-{run_id}`",
-              f"- 状态：`{state['status']}`",
-              f"- 选题确认人：{state.get('topic_approval_actor') or '-'}",
           ]
-          if state["status"] == "completed":
-              lines.extend([
-                  f"- HTML：`{state['outputs']['draft_html']}`",
-                  f"- 质量门禁：`{state['outputs']['quality_gate']}`",
-                  f"- 视觉审查：`{state['outputs']['visual_review']}`",
-              ])
+          if not state_path.is_file():
+              lines.append(f"- 错误：缺少状态文件 `{state_path}`，选题 artifact 可能未正确恢复")
           else:
-              lines.append(f"- 错误：{state.get('error') or '文章未完成'}")
+              state = json.loads(state_path.read_text(encoding="utf-8"))
+              lines.extend([
+                  f"- 状态：`{state['status']}`",
+                  f"- 选题确认人：{state.get('topic_approval_actor') or '-'}",
+              ])
+              if state["status"] == "completed":
+                  lines.extend([
+                      f"- HTML：`{state['outputs']['draft_html']}`",
+                      f"- 质量门禁：`{state['outputs']['quality_gate']}`",
+                      f"- 视觉审查：`{state['outputs']['visual_review']}`",
+                  ])
+              else:
+                  lines.append(f"- 错误：{state.get('error') or '文章未完成'}")
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as handle:
               handle.write("\n".join(lines) + "\n")
           PY
