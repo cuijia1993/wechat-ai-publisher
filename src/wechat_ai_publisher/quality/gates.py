@@ -21,8 +21,12 @@ PLACEHOLDER_PATTERNS = [
 CLAIM_PATTERN = re.compile(r"实测|提升|降低|覆盖率|准确率|\d+(?:\.\d+)?%")
 VERSION_PATTERN = re.compile(r"\b(?:v?\d+\.\d+(?:\.\d+)?|GA|Release)\b|版本|正式发布", re.IGNORECASE)
 RUNTIME_ASSERTION_PATTERN = re.compile(
-    r"实测|跑通|验证了|测试通过|运行结果|压测|QPS|性能(?:提升|降低)|"
+    r"(?<!非)(?<!未经)(?<!不是)实测|跑通|验证了|测试通过|运行结果|压测|QPS|性能(?:提升|降低)|"
     r"(?:提升|降低)了?\s*\d+(?:\.\d+)?%"
+)
+NEGATED_RUNTIME_ASSERTION_PATTERN = re.compile(
+    r"(?:非|并非|不是|未经|不要|不得|禁止|避免|没有|无).{0,12}?"
+    r"(?:实测|跑通|验证了|测试通过|运行结果|压测|QPS|性能(?:提升|降低))"
 )
 RUNTIME_EVIDENCE_KINDS = {"runtime_log", "benchmark", "manual_verification"}
 EXAMPLE_PATTERN = re.compile(r"例如|比如|示例|输入|输出|原文|改写前|改写后|提示词|清单")
@@ -47,6 +51,10 @@ TEMPLATE_SCENE_PATTERN = re.compile(
 )
 GENERIC_TRANSITION_PATTERN = re.compile(
     r"问题是|更稳妥的做法是|值得注意的是|真正重要的是|真正危险的是"
+)
+REFERENCE_SECTION_PATTERN = re.compile(
+    r"^#{2,3}\s+(?:参考资料|参考来源|来源)\s*$([\s\S]*?)(?=^#{2,3}\s+|\Z)",
+    re.MULTILINE,
 )
 
 
@@ -149,6 +157,45 @@ class QualityGate:
         if len(headings) < 3:
             findings.append(GateFinding(code="missing_structure", message="正文至少需要 3 个二、三级章节"))
 
+        if topic.sources:
+            reference_section = REFERENCE_SECTION_PATTERN.search(article.markdown)
+            if not reference_section:
+                findings.append(
+                    GateFinding(
+                        code="missing_reference_section",
+                        message="正文缺少“参考资料”章节，必须列出结构化来源",
+                    )
+                )
+            else:
+                references = reference_section.group(1)
+                for source in topic.sources:
+                    markdown_link = f"]({source.url})"
+                    if markdown_link not in references:
+                        findings.append(
+                            GateFinding(
+                                code="unlinked_reference",
+                                message=(
+                                    "参考资料必须使用 Markdown 有序列表和可点击链接："
+                                    f"{source.title}"
+                                ),
+                            )
+                        )
+                reference_lines = [
+                    line.strip()
+                    for line in references.splitlines()
+                    if line.strip()
+                ]
+                if reference_lines and any(
+                    not re.match(r"^\d+\.\s+\[[^\]]+\]\(https?://[^)]+\)", line)
+                    for line in reference_lines
+                ):
+                    findings.append(
+                        GateFinding(
+                            code="invalid_reference_format",
+                            message="参考资料每一项都必须使用“1. [标题](URL)”格式",
+                        )
+                    )
+
         numbered_headings = NUMBERED_HEADING_PATTERN.findall(article.markdown)
         if len(numbered_headings) >= 3:
             findings.append(
@@ -226,7 +273,8 @@ class QualityGate:
                         )
                     )
             available_kinds = {item.kind for item in verified_items.values()}
-            if RUNTIME_ASSERTION_PATTERN.search(text) and not (
+            runtime_claim_text = NEGATED_RUNTIME_ASSERTION_PATTERN.sub("", text)
+            if RUNTIME_ASSERTION_PATTERN.search(runtime_claim_text) and not (
                 available_kinds & RUNTIME_EVIDENCE_KINDS
             ):
                 findings.append(

@@ -85,11 +85,36 @@ def test_valid_source_date_allows_version_information():
     sourced_topic.sources = [
         Source(title="Official release", url="https://example.com/release", accessed_at="2026-07-27")
     ]
-    versioned = article(VALID_MARKDOWN + "\n\nSpring AI 2.0 正式发布。")
+    versioned = article(
+        VALID_MARKDOWN
+        + "\n\nSpring AI 2.0 正式发布。"
+        + "\n\n## 参考资料\n\n1. [Official release](https://example.com/release)"
+    )
 
     result = QualityGate(QualityConfig()).check(versioned, sourced_topic)
 
     assert result.passed
+
+
+def test_reference_section_requires_ordered_clickable_links():
+    sourced_topic = topic()
+    sourced_topic.sources = [
+        Source(
+            title="Official release",
+            url="https://example.com/release",
+            accessed_at="2026-07-27",
+        )
+    ]
+    malformed = article(
+        VALID_MARKDOWN
+        + "\n\n## 参考资料\n\nOfficial release：https://example.com/release"
+    )
+
+    result = QualityGate(QualityConfig()).check(malformed, sourced_topic)
+    codes = {item.code for item in result.findings}
+
+    assert not result.passed
+    assert {"unlinked_reference", "invalid_reference_format"} <= codes
 
 
 def test_runtime_claim_requires_runtime_evidence_in_contract():
@@ -121,6 +146,39 @@ def test_runtime_claim_requires_runtime_evidence_in_contract():
 
     assert not result.passed
     assert "unsupported_runtime_claim" in {item.code for item in result.findings}
+
+
+def test_negated_runtime_claim_does_not_require_runtime_evidence():
+    contracted_topic = topic()
+    contracted_topic.evidence_contract = EvidenceContract(
+        items=[
+            EvidenceItem(
+                id="official",
+                kind="official_source",
+                description="官方功能说明",
+                source_url="https://example.com/release",
+                verified=True,
+            )
+        ],
+        claims=[
+            ClaimRequirement(
+                id="release",
+                claim="官方介绍了该功能",
+                required_kinds=["official_source"],
+                evidence_refs=["official"],
+                supported=True,
+            )
+        ],
+        ready_to_write=True,
+    )
+    explanatory = article(
+        VALID_MARKDOWN
+        + "\n\n以下步骤仅为官方功能推演，并非实测运行记录，也不要虚构任何运行结果。"
+    )
+
+    result = QualityGate(QualityConfig()).check(explanatory, contracted_topic)
+
+    assert "unsupported_runtime_claim" not in {item.code for item in result.findings}
 
 
 def test_demo_article_is_never_publishable():

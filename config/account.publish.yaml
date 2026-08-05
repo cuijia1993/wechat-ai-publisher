@@ -4,7 +4,7 @@ account:
   default_digest: 关注 AI 如何影响普通人的工作、钱包、安全、健康与家庭，提供看得懂、用得上的判断和避坑清单。
 
 model:
-  model: qwen3.7-max-2026-05-20
+  model: qwen3.7-max
   base_url: https://llm-q5islkwwval2g1sf.cn-beijing.maas.aliyuncs.com/compatible-mode/v1
   base_url_env: OPENAI_BASE_URL
   api_key_env: OPENAI_API_KEY
@@ -21,10 +21,11 @@ discovery:
   sources_file: config/sources.yaml
 
 agent:
-  max_steps: 24
+  max_steps: 40
   max_revisions: 2
   stage_timeout_seconds: 180
   draft_only: true
+  require_topic_approval: true
 
 render:
   theme_file: config/themes/professional-minimal.yaml

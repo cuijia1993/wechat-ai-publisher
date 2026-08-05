@@ -136,7 +136,7 @@ class WechatFormatter:
             if pattern.search(body):
                 body = pattern.sub(rf"\1{block_html}", body, count=1)
             else:
-                body += block_html
+                raise ValueError(f"视觉锚点未匹配正文标题：{anchor}")
         return body
 
     def render_body(

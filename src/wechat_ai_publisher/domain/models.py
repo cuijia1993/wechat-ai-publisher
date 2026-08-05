@@ -41,6 +41,7 @@ class EvidenceItem(BaseModel):
     kind: EvidenceKind
     description: str
     source_url: str | None = None
+    quote: str | None = None
     verified: bool = False
 
 
@@ -56,6 +57,7 @@ class EvidenceContract(BaseModel):
     items: list[EvidenceItem] = Field(default_factory=list)
     claims: list[ClaimRequirement] = Field(default_factory=list)
     missing: list[str] = Field(default_factory=list)
+    topic_supported: bool = True
     ready_to_write: bool = False
 
 
@@ -193,6 +195,19 @@ class SourceSignal(BaseModel):
     tags: list[str] = Field(default_factory=list)
 
 
+class SourceDocument(BaseModel):
+    signal_id: str
+    title: str
+    url: str
+    content: str = ""
+    content_type: str = ""
+    extraction_method: str = "html"
+    fetched_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    content_hash: str = ""
+    usable: bool = False
+    error: str | None = None
+
+
 class DiscoveryBatch(BaseModel):
     batch_id: str
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
@@ -276,7 +291,13 @@ class AgentStep(BaseModel):
 
 class AgentRun(BaseModel):
     run_id: str
-    status: Literal["running", "completed", "failed", "blocked"] = "running"
+    status: Literal[
+        "running",
+        "completed",
+        "failed",
+        "blocked",
+        "awaiting_approval",
+    ] = "running"
     next_action: str = "discover"
     model: str
     prompt_version: str = "agent-v2-evidence-contract"
@@ -286,7 +307,19 @@ class AgentRun(BaseModel):
     outputs: dict[str, str] = Field(default_factory=dict)
     revision_count: int = 0
     revision_counts: dict[str, int] = Field(default_factory=dict)
+    rejected_signal_ids: list[str] = Field(default_factory=list)
+    rejected_source_hosts: list[str] = Field(default_factory=list)
+    topic_approval_status: Literal[
+        "not_required",
+        "pending",
+        "approved",
+        "rejected",
+    ] = "not_required"
+    topic_approval_signal_id: str | None = None
+    topic_approval_actor: str | None = None
+    topic_approval_note: str | None = None
+    topic_approved_at: datetime | None = None
     max_revisions: int = 2
-    max_steps: int = 16
+    max_steps: int = 40
     error: str | None = None
 

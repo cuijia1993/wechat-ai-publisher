@@ -1,8 +1,12 @@
 max_items_per_source: 8
 lookback_days: 45
 timeout_seconds: 20
+min_document_chars: 800
+max_document_chars: 40000
+max_document_bytes: 2000000
 github_token_env: GITHUB_TOKEN
 
+# 发现阶段标题/摘要命中这些词才会加分；中文词优先服务国内大众选题。
 include_keywords:
   - ai
   - privacy
@@ -42,8 +46,38 @@ include_keywords:
   - 家庭
   - 情绪
   - 旅行
+  - 人工智能
+  - 大模型
+  - 生成式
+  - 深度合成
+  - 拟人化
+  - 陪伴
+  - 标识
+  - 换脸
+  - 仿声
+  - 魔改
+  - 智能体
+  - 录取
+  - 通知书
+  - 开学
+  - 高考
+  - 志愿
+  - 豆包
+  - 通义
+  - 元宝
+  - 文心
+  - 混元
+  - 鸿蒙
+  - 微信
+  - 支付宝
+  - 网信办
+  - 工信部
+  - 教育部
+  - 客服
+  - 套餐
 
 rss:
+  # —— 海外官方（保留，作对照与国际产品变化）——
   - name: OpenAI News
     url: https://openai.com/news/rss.xml
     enabled: true
@@ -63,6 +97,46 @@ rss:
     url: https://spring.io/blog.atom
     enabled: false
 
+  # —— 国内科技媒体（默认开启，服务中国读者选题）——
+  - name: 量子位
+    url: https://www.qbitai.com/feed
+    enabled: true
+  - name: 雷峰网
+    url: https://www.leiphone.com/feed
+    enabled: true
+  - name: 极客公园
+    url: https://www.geekpark.net/rss
+    enabled: true
+  - name: 36氪
+    url: https://36kr.com/feed
+    enabled: true
+  - name: 爱范儿
+    url: https://www.ifanr.com/feed
+    enabled: true
+  - name: IT之家
+    url: https://www.ithome.com/rss/
+    enabled: true
+  - name: Solidot
+    url: https://www.solidot.org/index.rss
+    enabled: true
+  - name: 中国新闻网社会
+    url: https://www.chinanews.com.cn/rss/society.xml
+    enabled: true
+
+  # —— 国内补充源（默认关闭，可按栏目需要打开）——
+  - name: 少数派
+    url: https://sspai.com/feed
+    enabled: false
+  - name: InfoQ 中国
+    url: https://www.infoq.cn/feed
+    enabled: false
+  - name: 美团技术团队
+    url: https://tech.meituan.com/feed
+    enabled: false
+  - name: 钛媒体
+    url: https://www.tmtpost.com/rss.xml
+    enabled: false
+
 github:
   - name: Spring AI
     repo: spring-projects/spring-ai
@@ -76,4 +150,3 @@ github:
   - name: Claude Code
     repo: anthropics/claude-code
     enabled: false
-

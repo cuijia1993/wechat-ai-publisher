@@ -32,14 +32,17 @@ class DemoProvider:
     def structured(self, *, system: str, user: str, response_model: type[T]) -> T:
         if response_model is TopicBrief:
             payload = json.loads(user)
+            if "provisional_brief" in payload:
+                return TopicBrief.model_validate(payload["provisional_brief"])
             signal = payload["candidates"][0]
             evidence_id = f"source:{signal['id']}"
+            primary_keyword = signal["title"][: min(12, len(signal["title"]))]
             value = TopicBrief(
                 signal_id=signal["id"],
                 decision="write",
                 content_type="workplace_guide",
-                title="AI 工具又出新功能，普通人应该马上跟进吗",
-                primary_search_keyword="AI 工具",
+                title=f"{primary_keyword}：普通人应该马上跟进吗",
+                primary_search_keyword=primary_keyword,
                 category="AI 提效",
                 target_reader="希望用 AI 改善日常工作的知识工作者",
                 reader_problem="新功能很多，却不知道哪些真正能节省时间",
@@ -64,7 +67,7 @@ class DemoProvider:
                     claims=[
                         ClaimRequirement(
                             id="official-fact",
-                            claim="官方来源包含本次版本变化信息",
+                            claim=f"官方来源标题为“{signal['title']}”",
                             required_kinds=["official_source"],
                             evidence_refs=[evidence_id],
                             supported=True,
@@ -73,6 +76,48 @@ class DemoProvider:
                     ready_to_write=True,
                 ),
                 reasoning="官方来源清晰，并能转化为多数知识工作者可用的判断清单",
+            )
+        elif response_model is EvidenceContract:
+            payload = json.loads(user)
+            document = payload["source_document"]
+            evidence_id = f"official:{document['signal_id']}"
+            detail_evidence_id = f"{evidence_id}:detail"
+            value = EvidenceContract(
+                items=[
+                    EvidenceItem(
+                        id=evidence_id,
+                        kind="official_source",
+                        description=f"官方来源正文：{document['title']}",
+                        source_url=document["url"],
+                        quote=document["content"],
+                        verified=True,
+                    ),
+                    EvidenceItem(
+                        id=detail_evidence_id,
+                        kind="official_source",
+                        description="官方来源正文提供了可核验的详细片段",
+                        source_url=document["url"],
+                        quote=document["content"],
+                        verified=True,
+                    ),
+                ],
+                claims=[
+                    ClaimRequirement(
+                        id="official-fact",
+                        claim=f"官方来源标题为“{document['title']}”",
+                        required_kinds=["official_source"],
+                        evidence_refs=[evidence_id],
+                        supported=True,
+                    ),
+                    ClaimRequirement(
+                        id="official-detail",
+                        claim=f"来源正文保留了“{document['content'][:30]}”这一原文片段",
+                        required_kinds=["official_source"],
+                        evidence_refs=[detail_evidence_id],
+                        supported=True,
+                    ),
+                ],
+                ready_to_write=True,
             )
         elif response_model is TopicSelection:
             payload = json.loads(user)
@@ -109,14 +154,19 @@ class DemoProvider:
             )
         elif response_model is ContentPlan:
             payload = json.loads(user)
-            contract = payload.get("topic", {}).get("evidence_contract") or {}
+            topic_payload = payload.get("topic", {})
+            contract = topic_payload.get("evidence_contract") or {}
             claim_ids = [claim["id"] for claim in contract.get("claims", [])]
+            primary_keyword = topic_payload.get(
+                "primary_search_keyword", "AI 工具"
+            )
+            recommended_title = f"{primary_keyword}：普通人别急着改变工作习惯"
             value = ContentPlan(
                 title_candidates=[
-                    "AI 工具又出新功能，别急着改变工作习惯",
+                    recommended_title,
                     "新功能发布后，普通人先检查这 5 项",
                 ],
-                recommended_title="AI 工具又出新功能，别急着改变工作习惯",
+                recommended_title=recommended_title,
                 digest="从一个日常工作场景出发，判断 AI 新功能是否真的值得采用。",
                 thesis="新功能只有转化成具体任务和验证步骤，才会带来真实效率",
                 sections=[
@@ -181,6 +231,13 @@ class DemoProvider:
             else:
                 title = "AI 工具又出新功能，别急着改变工作习惯"
                 digest = "从一个日常工作场景出发，判断新功能是否真的值得采用。"
+            source = (payload.get("topic") or {}).get("sources", [])
+            reference = ""
+            if source:
+                reference = (
+                    f"\n\n## 参考资料\n\n1. [{source[0]['title']}]"
+                    f"({source[0]['url']})"
+                )
             markdown = f"""# {title}
 
 ## 遇到的具体问题
@@ -205,7 +262,7 @@ class DemoProvider:
 
 ## 可复制模板
 
-采用新功能前先问四个问题：它替代了哪一步？迁移成本是多少？出错后谁核对？不用它会损失什么？四个问题答不清，就先别改工作习惯。
+采用新功能前先问四个问题：它替代了哪一步？迁移成本是多少？出错后谁核对？不用它会损失什么？四个问题答不清，就先别改工作习惯。{reference}
 """
             value = Article(
                 topic_id="demo",

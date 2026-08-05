@@ -14,6 +14,27 @@ def slugify(value: str) -> str:
     return slug[:80] or "article"
 
 
+def ensure_markdown_title(title: str, markdown: str) -> str:
+    """Keep Article.title visible in exported Markdown/HTML body.
+
+    Writer stages store the canonical title in Article.title and often omit the
+    leading ``#`` heading from markdown. Local drafts and HTML previews need it.
+    WeChat upload still strips the first ``<h1>`` because the title is sent as a
+    separate API field.
+    """
+    body = markdown.lstrip("\ufeff").lstrip()
+    heading = f"# {title.strip()}"
+    if not title.strip():
+        return body
+    first_line = body.splitlines()[0].strip() if body else ""
+    if first_line.startswith("# "):
+        if first_line == heading:
+            return body
+        rest = "\n".join(body.splitlines()[1:]).lstrip("\n")
+        return f"{heading}\n\n{rest}" if rest else heading
+    return f"{heading}\n\n{body}" if body else heading
+
+
 class DraftWriter:
     def __init__(self, output_dir: Path, formatter: WechatFormatter):
         self.output_dir = output_dir
@@ -99,12 +120,12 @@ class DraftWriter:
                 else ""
             )
 
-        self._atomic_write(markdown_path, article.markdown)
+        self._atomic_write(markdown_path, ensure_markdown_title(article.title, article.markdown))
         self._atomic_write(
             html_path,
             self.formatter.render_preview(
                 article.title,
-                article.markdown,
+                ensure_markdown_title(article.title, article.markdown),
                 prelude_html=prelude,
                 visual_blocks=visual_blocks,
             ),

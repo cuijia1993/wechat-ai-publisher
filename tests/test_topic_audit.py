@@ -6,10 +6,11 @@ from wechat_ai_publisher.domain.models import (
     ClaimRequirement,
     EvidenceContract,
     EvidenceItem,
+    SourceDocument,
     SourceSignal,
     TopicBrief,
 )
-from wechat_ai_publisher.topic.audit import audit_topic_brief
+from wechat_ai_publisher.topic.audit import audit_enriched_contract, audit_topic_brief
 
 
 def signal() -> SourceSignal:
@@ -19,7 +20,7 @@ def signal() -> SourceSignal:
         source_type="github",
         title="Spring AI 2.0.0",
         url="https://github.com/spring-projects/spring-ai/releases/tag/v2.0.0",
-        summary="Official release notes.",
+        summary="AI 工具发布了新的官方版本说明。",
         published_at=datetime.now(UTC),
     )
 
@@ -56,7 +57,7 @@ def brief(*, content_type="release_analysis", claim_kind="official_source") -> T
             claims=[
                 ClaimRequirement(
                     id="claim-1",
-                    claim="官方发布说明包含本次变化",
+                    claim="Spring AI 官方发布了 2.0.0 版本说明",
                     required_kinds=[claim_kind],
                     evidence_refs=["source-1"],
                 )
@@ -79,19 +80,219 @@ def test_official_release_brief_builds_verified_contract():
     ]
 
 
-def test_experiment_without_runtime_evidence_is_downgraded():
+def test_experiment_with_fake_benchmark_evidence_is_rejected():
     audited, issues = audit_topic_brief(
         brief(content_type="experiment", claim_kind="benchmark"),
         signal(),
     )
 
     assert issues
+    assert audited.decision == "reject"
+    assert not audited.evidence_contract.ready_to_write
+
+
+def test_unsupported_content_type_with_official_claim_is_safely_downgraded():
+    candidate = brief(content_type="experiment")
+
+    audited, issues = audit_topic_brief(candidate, signal())
+
+    assert issues == ["experiment 题型缺少所需运行或验证证据"]
     assert audited.decision == "downgrade"
-    assert audited.content_type == "workplace_guide"
+    assert audited.content_type == "release_analysis"
+    assert audited.title == candidate.title
+    assert audited.core_conclusion == candidate.core_conclusion
     assert audited.evidence_contract.ready_to_write
-    assert "实测" not in audited.title
-    assert audited.audience_scope == "broad_public"
-    assert audited.primary_search_keyword in audited.title
+
+
+def test_generic_evidence_claim_is_rejected():
+    generic = brief()
+    generic.evidence_contract.claims[0].claim = "官方资料包含相关发布或变更信息"
+
+    audited, issues = audit_topic_brief(generic, signal())
+
+    assert audited.decision == "reject"
+    assert not audited.evidence_contract.ready_to_write
+    assert "核心结论过于笼统" in issues[0]
+
+
+def test_primary_keyword_must_be_grounded_in_source():
+    unrelated = brief().model_copy(
+        update={
+            "title": "AI 替你做决定前，先检查哪些风险",
+            "primary_search_keyword": "AI 替你做决定",
+        }
+    )
+
+    audited, issues = audit_topic_brief(unrelated, signal())
+
+    assert audited.decision == "reject"
+    assert "主搜索词与官方来源不一致：AI 替你做决定" in issues
+
+
+def test_chinese_keyword_can_match_english_source_concepts():
+    scam_signal = signal().model_copy(
+        update={
+            "title": "Disrupting a Criminal Scam Operation",
+            "summary": "A scam operation used ChatGPT for investment and impersonation schemes.",
+            "tags": ["ai", "scam"],
+        }
+    )
+    candidate = brief().model_copy(
+        update={
+            "signal_id": scam_signal.id,
+            "title": "AI 诈骗出现新套路，普通人如何保护钱包",
+            "primary_search_keyword": "AI 诈骗",
+        }
+    )
+
+    audited, issues = audit_topic_brief(candidate, scam_signal)
+
+    assert issues == []
+    assert audited.decision == "write"
+
+
+def test_compound_chinese_keyword_matches_multiple_english_concepts():
+    search_signal = signal().model_copy(
+        update={
+            "title": "AI Mode helps you book concert tickets",
+            "summary": "Use Search to book tickets and plan time offline.",
+            "tags": ["ai"],
+        }
+    )
+    candidate = brief().model_copy(
+        update={
+            "signal_id": search_signal.id,
+            "title": "用 AI 搜索订票前要核对哪些信息",
+            "primary_search_keyword": "AI 搜索订票",
+        }
+    )
+
+    audited, issues = audit_topic_brief(candidate, search_signal)
+
+    assert issues == []
+    assert audited.decision == "write"
+
+
+def test_enriched_contract_requires_exact_quote_from_source_document():
+    source = signal()
+    document = SourceDocument(
+        signal_id=source.id,
+        title=source.title,
+        url=source.url,
+        content=(
+            "Spring AI 2.0 adds an official migration guide for “application teams”. "
+            "The guide lists supported upgrade steps and compatibility limitations."
+        ),
+        extraction_method="signal_override",
+        usable=True,
+    )
+    contract = EvidenceContract(
+        items=[
+            EvidenceItem(
+                id="quote-1",
+                kind="official_source",
+                description="官方提供迁移指南",
+                source_url=source.url,
+                quote='Spring AI 2.0 adds an official migration guide for "application teams".',
+            )
+        ],
+        claims=[
+            ClaimRequirement(
+                id="claim-1",
+                claim="Spring AI 2.0 提供了官方迁移指南",
+                required_kinds=["official_source"],
+                evidence_refs=["quote-1"],
+            )
+        ],
+        ready_to_write=True,
+    )
+
+    audited, issues = audit_enriched_contract(contract, source, document)
+
+    assert issues == []
+    assert audited.ready_to_write
+    assert audited.items[0].verified
+    assert audited.claims[0].supported
+
+
+def test_enriched_contract_rejects_quote_not_found_in_source():
+    source = signal()
+    document = SourceDocument(
+        signal_id=source.id,
+        title=source.title,
+        url=source.url,
+        content="The official page only announces a version release.",
+        usable=True,
+    )
+    contract = EvidenceContract(
+        items=[
+            EvidenceItem(
+                id="quote-1",
+                kind="official_source",
+                description="不存在的性能结论",
+                source_url=source.url,
+                quote="The new release improves performance by fifty percent.",
+            )
+        ],
+        claims=[
+            ClaimRequirement(
+                id="claim-1",
+                claim="新版本性能提升 50%",
+                required_kinds=["official_source"],
+                evidence_refs=["quote-1"],
+            )
+        ],
+        ready_to_write=True,
+    )
+
+    audited, issues = audit_enriched_contract(contract, source, document)
+
+    assert issues
+    assert not audited.ready_to_write
+    assert not audited.items[0].verified
+    assert not audited.claims[0].supported
+
+
+def test_enriched_contract_rejects_topic_not_supported_by_quotes():
+    source = signal()
+    content = (
+        "Spring AI 2.0 adds an official migration guide for application teams. "
+        "The guide lists supported upgrade steps and compatibility limitations."
+    )
+    document = SourceDocument(
+        signal_id=source.id,
+        title=source.title,
+        url=source.url,
+        content=content,
+        extraction_method="signal_override",
+        usable=True,
+    )
+    contract = EvidenceContract(
+        items=[
+            EvidenceItem(
+                id="quote-1",
+                kind="official_source",
+                description="官方提供迁移指南",
+                source_url=source.url,
+                quote=content,
+            )
+        ],
+        claims=[
+            ClaimRequirement(
+                id="claim-1",
+                claim="Spring AI 2.0 提供了官方迁移指南",
+                required_kinds=["official_source"],
+                evidence_refs=["quote-1"],
+            )
+        ],
+        topic_supported=False,
+        ready_to_write=False,
+    )
+
+    audited, issues = audit_enriched_contract(contract, source, document)
+
+    assert not audited.ready_to_write
+    assert "官方全文不足以支持当前标题" in "\n".join(issues)
 
 
 def test_brief_cannot_select_signal_outside_candidates():

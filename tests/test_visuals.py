@@ -83,6 +83,25 @@ def test_theme_and_components_use_wechat_compatible_inline_styles():
     assert "<script" not in html
 
 
+def test_concept_image_does_not_also_render_duplicate_html_card():
+    theme = load_theme(ROOT / "config" / "themes" / "professional-minimal.yaml")
+    plan = VisualPlan(
+        cover_subtitle="概念图",
+        blocks=[
+            VisualBlock(
+                id="concept",
+                kind="concept_image",
+                anchor="对应章节",
+                title="跨应用数据关联",
+                description="日历与搜索工具的数据交汇",
+                prompt="abstract calendar and search",
+            )
+        ],
+    )
+
+    assert render_visual_blocks(plan, theme) == {}
+
+
 def test_template_images_have_expected_dimensions(tmp_path):
     renderer = TemplateImageRenderer(
         load_theme(ROOT / "config" / "themes" / "professional-minimal.yaml")

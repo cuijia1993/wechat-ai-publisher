@@ -45,10 +45,11 @@ class DiscoveryConfig(BaseModel):
 
 
 class AgentConfig(BaseModel):
-    max_steps: int = 24
+    max_steps: int = 40
     max_revisions: int = 2
     stage_timeout_seconds: float = 180
     draft_only: bool = True
+    require_topic_approval: bool = True
 
 
 class ImageProviderConfig(BaseModel):
@@ -127,6 +128,9 @@ class SourcesConfig(BaseModel):
     max_items_per_source: int = 8
     lookback_days: int = 45
     timeout_seconds: float = 20
+    min_document_chars: int = 800
+    max_document_chars: int = 40000
+    max_document_bytes: int = 2_000_000
     github_token_env: str = "GITHUB_TOKEN"
     include_keywords: list[str] = Field(default_factory=list)
     rss: list[RSSSourceConfig] = Field(default_factory=list)

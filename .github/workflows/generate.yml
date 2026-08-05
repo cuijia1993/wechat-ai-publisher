@@ -13,9 +13,11 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  generate:
+  select-topic:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 30
+    outputs:
+      agent_run_id: ${{ steps.candidate.outputs.agent_run_id }}
     steps:
       - uses: actions/checkout@v4
 
@@ -32,42 +34,131 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: test -n "$OPENAI_API_KEY"
 
-      - name: Generate reviewed article
+      - name: Select and verify topic
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
           GITHUB_TOKEN: ${{ github.token }}
-        run: wechat-ai-publisher --config config/account.ci.yaml agent run --draft-only
+        run: |
+          wechat-ai-publisher \
+            --config config/account.ci.yaml \
+            agent run \
+            --draft-only > "$RUNNER_TEMP/topic-selection.json"
 
-      - name: Write generation summary
-        if: always()
+      - name: Validate topic candidate
+        id: candidate
         run: |
           python - <<'PY'
           import json
           import os
           from pathlib import Path
 
-          manifests = sorted(Path("runtime").glob("agent-*/manifest.json"))
           states = sorted(Path("runtime").glob("agent-*/agent-state.json"))
-          lines = ["## 微信文章生成结果", ""]
-          if manifests:
-              data = json.loads(manifests[-1].read_text(encoding="utf-8"))
+          if len(states) != 1:
+              raise SystemExit(f"必须恰好生成一个 Agent 状态，实际为 {len(states)}")
+          state = json.loads(states[0].read_text(encoding="utf-8"))
+          if state["status"] != "awaiting_approval":
+              raise SystemExit(f"Agent 未进入选题待确认状态：{state['status']}")
+          approval_path = Path(state["outputs"]["topic_approval"])
+          approval = json.loads(approval_path.read_text(encoding="utf-8"))
+          lines = [
+              "## 待确认选题",
+              "",
+              f"- Agent 任务：`agent-{state['run_id']}`",
+              f"- 标题：**{approval['title']}**",
+              f"- 分类：{approval['category']}",
+              f"- 目标读者：{approval['target_reader']}",
+              f"- 读者问题：{approval['reader_problem']}",
+              f"- 核心结论：{approval['core_conclusion']}",
+              f"- 可复制资产：{approval['reusable_asset']}",
+              f"- 官方来源：[{approval['source']['title']}]({approval['source']['url']})",
+              "",
+              "请在 `topic-approval` Environment 中批准后继续生成文章。",
+          ]
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as handle:
+              handle.write(f"agent_run_id={state['run_id']}\n")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as handle:
+              handle.write("\n".join(lines) + "\n")
+          PY
+
+      - name: Upload topic candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: topic-candidate-${{ github.run_id }}
+          path: runtime/
+          if-no-files-found: error
+          retention-days: 14
+
+  continue-generation:
+    needs: select-topic
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: topic-approval
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install publisher
+        run: pip install -e .
+
+      - name: Download approved topic candidate
+        uses: actions/download-artifact@v4
+        with:
+          name: topic-candidate-${{ github.run_id }}
+          path: .
+
+      - name: Record topic approval
+        run: |
+          wechat-ai-publisher \
+            --config config/account.ci.yaml \
+            agent approve-topic \
+            --run-id "${{ needs.select-topic.outputs.agent_run_id }}" \
+            --actor "${{ github.actor }}" \
+            --note "Approved through GitHub Environment topic-approval"
+
+      - name: Generate reviewed article
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          wechat-ai-publisher \
+            --config config/account.ci.yaml \
+            agent resume \
+            --run-id "${{ needs.select-topic.outputs.agent_run_id }}"
+
+      - name: Write generation summary
+        if: always()
+        env:
+          AGENT_RUN_ID: ${{ needs.select-topic.outputs.agent_run_id }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          run_id = os.environ["AGENT_RUN_ID"]
+          state_path = Path("runtime") / f"agent-{run_id}" / "agent-state.json"
+          state = json.loads(state_path.read_text(encoding="utf-8"))
+          lines = [
+              "## 微信文章生成结果",
+              "",
+              f"- Agent 任务：`agent-{run_id}`",
+              f"- 状态：`{state['status']}`",
+              f"- 选题确认人：{state.get('topic_approval_actor') or '-'}",
+          ]
+          if state["status"] == "completed":
               lines.extend([
-                  f"- Agent 任务：`{data['job_id']}`",
-                  f"- 状态：`{data['status']}`",
-                  f"- HTML：`{data['outputs']['draft_html']}`",
-                  f"- 质量门禁：`{data['outputs']['quality_gate']}`",
-                  f"- 视觉审查：`{data['outputs']['visual_review']}`",
-              ])
-          elif states:
-              data = json.loads(states[-1].read_text(encoding="utf-8"))
-              lines.extend([
-                  f"- Agent 任务：`agent-{data['run_id']}`",
-                  f"- 状态：`{data['status']}`",
-                  f"- 错误：{data.get('error') or '未生成可发布任务包'}",
+                  f"- HTML：`{state['outputs']['draft_html']}`",
+                  f"- 质量门禁：`{state['outputs']['quality_gate']}`",
+                  f"- 视觉审查：`{state['outputs']['visual_review']}`",
               ])
           else:
-              lines.append("- 未发现 Agent 运行产物。")
+              lines.append(f"- 错误：{state.get('error') or '文章未完成'}")
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as handle:
               handle.write("\n".join(lines) + "\n")
           PY

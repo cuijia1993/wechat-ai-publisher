@@ -10,6 +10,7 @@ from wechat_ai_publisher.domain.models import (
     GateResult,
     ResearchCard,
     ReviewResult,
+    SourceDocument,
     SourceSignal,
     TopicBrief,
     VisualBlock,
@@ -39,17 +40,27 @@ def signal() -> SourceSignal:
     )
 
 
-def build_agent(tmp_path: Path, provider=None, image_provider=None) -> ContentOperationsAgent:
+def build_agent(
+    tmp_path: Path,
+    provider=None,
+    image_provider=None,
+    *,
+    signals=None,
+    source_fetcher=None,
+    require_topic_approval=False,
+) -> ContentOperationsAgent:
     config = load_config(ROOT / "config" / "account.example.yaml")
     config.content.output_dir = tmp_path / "runtime"
-    config.agent.max_steps = 16
+    config.agent.max_steps = 24
     config.agent.max_revisions = 2
+    config.agent.require_topic_approval = require_topic_approval
     return ContentOperationsAgent(
         config,
         provider or DemoProvider(),
         DiscoveryClient(SourcesConfig()),
         DraftWriter(tmp_path / "drafts", WechatFormatter(ROOT / "templates" / "article.html")),
-        signals_override=[signal()],
+        signals_override=signals or [signal()],
+        source_fetcher=source_fetcher,
         image_provider=image_provider,
     )
 
@@ -78,13 +89,16 @@ def test_agent_runs_to_local_draft_and_resume_is_idempotent(tmp_path):
     assert [step.action for step in state.steps] == [
         "discover",
         "select",
+        "enrich_source",
+        "refine_topic",
+        "build_evidence",
         "research",
         "plan",
-        "visual_plan",
         "write",
         "review",
         "gate",
         "editorial_review",
+        "visual_plan",
         "render_assets",
         "visual_review",
         "export",
@@ -93,6 +107,38 @@ def test_agent_runs_to_local_draft_and_resume_is_idempotent(tmp_path):
     resumed = agent.resume(state.run_id)
     assert len(resumed.steps) == len(state.steps)
     assert resumed.outputs == state.outputs
+
+
+def test_agent_waits_for_topic_approval_before_research(tmp_path):
+    agent = build_agent(tmp_path, require_topic_approval=True)
+
+    pending = agent.run()
+
+    assert pending.status == "awaiting_approval"
+    assert pending.topic_approval_status == "pending"
+    assert pending.next_action == "stop"
+    assert [step.action for step in pending.steps][-1] == "await_topic_approval"
+    approval = json.loads(
+        Path(pending.outputs["topic_approval"]).read_text(encoding="utf-8")
+    )
+    assert approval["title"]
+    assert approval["source"]["url"] == signal().url
+    assert "research" not in pending.outputs
+
+    unchanged = agent.resume(pending.run_id)
+    assert len(unchanged.steps) == len(pending.steps)
+
+    agent.approve_topic(
+        pending.run_id,
+        actor="reviewer@example.com",
+        note="标题和证据可以进入写作",
+    )
+    completed = agent.resume(pending.run_id)
+
+    assert completed.status == "completed"
+    assert completed.topic_approval_status == "approved"
+    assert completed.topic_approval_actor == "reviewer@example.com"
+    assert Path(completed.outputs["draft_html"]).is_file()
 
 
 class FailSelectionOnceProvider(DemoProvider):
@@ -136,7 +182,8 @@ def test_topic_agent_stops_before_research_when_topic_is_rejected(tmp_path):
     state = build_agent(tmp_path, RejectTopicProvider()).run()
 
     assert state.status == "blocked"
-    assert [step.action for step in state.steps] == ["discover", "select"]
+    assert [step.action for step in state.steps] == ["discover", "select", "select"]
+    assert state.rejected_signal_ids == [signal().id]
     assert "topic_brief" in state.outputs
     assert "research" not in state.outputs
 
@@ -157,9 +204,66 @@ def test_agent_stops_when_research_does_not_bind_claim_evidence(tmp_path):
     state = build_agent(tmp_path, UnboundResearchProvider()).run()
 
     assert state.status == "blocked"
-    assert [step.action for step in state.steps][-1] == "research"
+    assert [step.action for step in state.steps][-2:] == ["research", "select"]
+    assert state.rejected_signal_ids == [signal().id]
     research = json.loads(Path(state.outputs["research"]).read_text(encoding="utf-8"))
     assert research["missing_evidence"]
+
+
+class FailFirstSourceFetcher:
+    def fetch(self, candidate: SourceSignal) -> SourceDocument:
+        if candidate.id == "bad-source":
+            return SourceDocument(
+                signal_id=candidate.id,
+                title=candidate.title,
+                url=candidate.url,
+                usable=False,
+                error="官方页面要求人机验证",
+            )
+        return SourceDocument(
+            signal_id=candidate.id,
+            title=candidate.title,
+            url=candidate.url,
+            content=candidate.summary,
+            content_type="text/plain",
+            extraction_method="test",
+            content_hash="test-hash",
+            usable=True,
+        )
+
+
+def test_agent_tries_next_candidate_when_source_cannot_be_fetched(tmp_path):
+    bad = signal().model_copy(
+        update={
+            "id": "bad-source",
+            "url": "https://example.com/bad",
+            "score": 200,
+        }
+    )
+    good = signal().model_copy(
+        update={
+            "id": "good-source",
+            "title": "Spring AI Agent Good Update",
+            "url": "https://good.example.org/good",
+            "summary": (
+                "Spring AI Agent Good Update provides detailed official information "
+                "about Java agent testing and observability."
+            ),
+            "score": 100,
+        }
+    )
+    state = build_agent(
+        tmp_path,
+        signals=[bad, good],
+        source_fetcher=FailFirstSourceFetcher(),
+    ).run()
+
+    assert state.status == "completed"
+    assert state.rejected_signal_ids == ["bad-source"]
+    assert state.rejected_source_hosts == ["example.com"]
+    assert json.loads(
+        Path(state.outputs["selected_signal"]).read_text(encoding="utf-8")
+    )["id"] == "good-source"
 
 
 class RevisionOnceProvider(DemoProvider):
@@ -175,7 +279,10 @@ class RevisionOnceProvider(DemoProvider):
                     role="combined_reviewer",
                     passed=False,
                     issues=["需要补充演示边界"],
-                    revised_markdown=article["markdown"] + "\n\n本文仅用于验证 Agent 工作流。",
+                    revised_markdown=article["markdown"].replace(
+                        "\n\n## 参考资料",
+                        "\n\n本文仅用于验证 Agent 工作流。\n\n## 参考资料",
+                    ),
                 )
         return super().structured(system=system, user=user, response_model=response_model)
 
@@ -252,7 +359,10 @@ class EditorialRevisionOnceProvider(DemoProvider):
                     overall_score=7,
                     scores={"evidence_density": 7},
                     issues=["结尾缺少明确的证据边界"],
-                    revised_markdown=article["markdown"] + "\n\n以上结论仅适用于给定证据范围。",
+                    revised_markdown=article["markdown"].replace(
+                        "\n\n## 参考资料",
+                        "\n\n以上结论仅适用于给定证据范围。\n\n## 参考资料",
+                    ),
                 )
         return super().structured(system=system, user=user, response_model=response_model)
 
@@ -265,6 +375,38 @@ def test_editorial_reviewer_revises_before_rendering(tmp_path):
     assert actions.count("editorial_review") == 2
     assert actions.index("editorial_review") < actions.index("render_assets")
     assert "以上结论仅适用于给定证据范围" in Path(
+        state.outputs["draft_markdown"]
+    ).read_text(encoding="utf-8")
+
+
+class EditorialPassedWithRevisionProvider(DemoProvider):
+    def __init__(self):
+        self.editorial_review_count = 0
+
+    def structured(self, *, system: str, user: str, response_model):
+        if response_model is EditorialReviewResult:
+            self.editorial_review_count += 1
+            if self.editorial_review_count == 1:
+                article = json.loads(user)["article"]
+                return EditorialReviewResult(
+                    passed=True,
+                    overall_score=9,
+                    scores={"factual_accuracy": 9},
+                    revised_markdown=article["markdown"].replace(
+                        "\n\n## 参考资料",
+                        "\n\n主编修正了证据边界。\n\n## 参考资料",
+                    ),
+                )
+        return super().structured(system=system, user=user, response_model=response_model)
+
+
+def test_editorial_revision_is_applied_even_when_reviewer_marks_passed(tmp_path):
+    state = build_agent(tmp_path, EditorialPassedWithRevisionProvider()).run()
+
+    assert state.status == "completed"
+    assert state.revision_counts["editorial_review"] == 1
+    assert [step.action for step in state.steps].count("editorial_review") == 2
+    assert "主编修正了证据边界" in Path(
         state.outputs["draft_markdown"]
     ).read_text(encoding="utf-8")
 
@@ -344,7 +486,7 @@ class FailingImageProvider:
         raise TimeoutError("image timeout")
 
 
-def test_agent_falls_back_to_template_when_static_image_fails(tmp_path):
+def test_agent_falls_back_to_single_html_card_when_static_image_fails(tmp_path):
     state = build_agent(
         tmp_path,
         ConceptVisualProvider(),
@@ -353,5 +495,7 @@ def test_agent_falls_back_to_template_when_static_image_fails(tmp_path):
 
     assert state.status == "completed"
     manifest = json.loads(Path(state.outputs["visual_manifest"]).read_text(encoding="utf-8"))
-    assert manifest["images"][0]["provider"] == "pillow-template-fallback"
+    assert manifest["images"] == []
+    block = manifest["html_blocks"]["AI 工作流设计"]
+    assert block.count("受控 Agent 工作流") == 1
 

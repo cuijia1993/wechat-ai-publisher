@@ -5,12 +5,21 @@ from pathlib import Path
 import httpx
 
 from wechat_ai_publisher.config import GitHubSourceConfig, RSSSourceConfig, SourcesConfig
-from wechat_ai_publisher.discovery.client import DiscoveryClient
+from wechat_ai_publisher.discovery.client import DiscoveryClient, _date
+from wechat_ai_publisher.discovery.source_fetcher import SourceFetcher
 from wechat_ai_publisher.domain.models import SourceSignal
 from wechat_ai_publisher.topic.selector import rank_signals
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_date_parses_china_feed_formats():
+    parsed = _date("2026-08-04 18:27:21  +0800")
+    assert parsed.year == 2026
+    assert parsed.month == 8
+    assert parsed.day == 4
+    assert parsed.astimezone(UTC).hour == 10
 
 
 def test_discovery_normalizes_rss_and_github():
@@ -100,4 +109,82 @@ def test_rank_signals_prioritizes_public_impact_and_risk_topics():
 
     assert ranked[0].id == public_impact.id
     assert ranked[0].score > product_update.score
+
+
+def test_source_fetcher_extracts_article_text_and_ignores_page_noise():
+    html = """
+    <html><body>
+      <nav>菜单与登录入口</nav>
+      <main><article>
+        <h1>Official AI safety update</h1>
+        <p>This official report explains a verified safety change for consumers.</p>
+        <p>It also documents the scope, limitations, and concrete response process.</p>
+      </article></main>
+      <script>secret page state</script>
+    </body></html>
+    """
+    client = httpx.Client(
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(
+                200,
+                headers={"content-type": "text/html; charset=utf-8"},
+                text=html,
+                request=request,
+            )
+        )
+    )
+    fetcher = SourceFetcher(
+        SourcesConfig(min_document_chars=80),
+        http=client,
+        resolve_hosts=False,
+    )
+    candidate = SourceSignal(
+        id="source",
+        source_name="Official",
+        source_type="rss",
+        title="Official AI safety update",
+        url="https://example.com/article",
+        summary="Short summary",
+        published_at=datetime.now(UTC),
+    )
+
+    document = fetcher.fetch(candidate)
+
+    assert document.usable
+    assert document.extraction_method == "html"
+    assert "verified safety change" in document.content
+    assert "菜单与登录入口" not in document.content
+    assert "secret page state" not in document.content
+
+
+def test_source_fetcher_rejects_challenge_page_and_private_url():
+    challenge = httpx.Client(
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(
+                200,
+                headers={"content-type": "text/html"},
+                text="<html>Enable JavaScript and cookies to continue</html>",
+                request=request,
+            )
+        )
+    )
+    config = SourcesConfig(min_document_chars=20)
+    fetcher = SourceFetcher(config, http=challenge, resolve_hosts=False)
+    challenged = SourceSignal(
+        id="challenge",
+        source_name="Official",
+        source_type="rss",
+        title="Challenge",
+        url="https://example.com/challenge",
+        summary="too short",
+        published_at=datetime.now(UTC),
+    )
+    private = challenged.model_copy(
+        update={"id": "private", "url": "http://127.0.0.1/admin"}
+    )
+
+    assert not fetcher.fetch(challenged).usable
+    private_document = fetcher.fetch(private)
+    assert not private_document.usable
+    assert "私有或本地网络" in (private_document.error or "")
 

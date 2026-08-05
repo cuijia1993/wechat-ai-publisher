@@ -12,7 +12,7 @@ def test_load_config_resolves_project_paths():
 
     assert config.account.name == "智效进化论"
     assert "普通人的工作、钱包、安全、健康与家庭" in config.account.default_digest
-    assert config.model.model == "qwen3.7-max-2026-05-20"
+    assert config.model.model == "qwen3.7-max"
     assert config.model.base_url == (
         "https://llm-q5islkwwval2g1sf.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
     )

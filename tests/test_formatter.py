@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from wechat_ai_publisher.rendering.formatter import WechatFormatter
 from wechat_ai_publisher.rendering.sanitize import sanitize_wechat_html, validate_wechat_html
 
@@ -57,6 +59,16 @@ def test_formatter_renders_references_as_numbered_list_instead_of_table():
     assert "<table" not in references
     assert ">1.</span>" in references
     assert "资料三" in references
+
+
+def test_formatter_rejects_visual_block_with_unmatched_heading_anchor():
+    formatter = WechatFormatter(ROOT / "templates" / "article.html")
+
+    with pytest.raises(ValueError, match="视觉锚点未匹配正文标题"):
+        formatter.render_body(
+            "## 最终正文标题\n\n正文内容。",
+            visual_blocks={"旧计划标题": "<section>不应追加到文末</section>"},
+        )
 
 
 def test_local_images_only_returns_unuploaded_paths():

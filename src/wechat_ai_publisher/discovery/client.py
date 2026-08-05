@@ -23,10 +23,18 @@ def _text(value: str | None, limit: int = 2000) -> str:
 def _date(value: str | None) -> datetime:
     if not value:
         return datetime.now(UTC)
+    cleaned = re.sub(r"\s+", " ", value).strip()
+    # 兼容 36氪等国内源：2026-08-04 18:27:21  +0800
+    cleaned = re.sub(r"\s+([+-])(\d{2}):?(\d{2})$", r"\1\2:\3", cleaned)
+    if re.match(r"^\d{4}-\d{2}-\d{2} \d", cleaned):
+        cleaned = cleaned.replace(" ", "T", 1)
     try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(cleaned.replace("Z", "+00:00"))
     except ValueError:
-        parsed = parsedate_to_datetime(value)
+        try:
+            parsed = parsedate_to_datetime(cleaned)
+        except (TypeError, ValueError, IndexError):
+            parsed = datetime.now(UTC)
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=UTC)
     return parsed.astimezone(UTC)
@@ -36,10 +44,23 @@ def _id(source_type: str, url: str) -> str:
     return f"{source_type}-{hashlib.sha256(url.encode()).hexdigest()[:16]}"
 
 
+DEFAULT_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+    ),
+    "Accept": "application/rss+xml, application/atom+xml, application/xml, text/xml, */*",
+}
+
+
 class DiscoveryClient:
     def __init__(self, config: SourcesConfig, *, http: httpx.Client | None = None):
         self.config = config
-        self.http = http or httpx.Client(timeout=config.timeout_seconds, follow_redirects=True)
+        self.http = http or httpx.Client(
+            timeout=config.timeout_seconds,
+            follow_redirects=True,
+            headers=DEFAULT_HEADERS,
+        )
 
     def _score(self, title: str, summary: str, published_at: datetime) -> tuple[float, list[str]]:
         title_text = title.lower()

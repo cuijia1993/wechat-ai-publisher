@@ -69,6 +69,8 @@ def render_visual_block(block: VisualBlock, theme: VisualTheme) -> str:
 def render_visual_blocks(plan: VisualPlan, theme: VisualTheme) -> dict[str, str]:
     rendered: dict[str, str] = {}
     for block in plan.blocks:
+        if block.kind == "concept_image":
+            continue
         rendered[block.anchor] = rendered.get(block.anchor, "") + render_visual_block(block, theme)
     return rendered
 

@@ -355,19 +355,51 @@ def cmd_agent_run(args: argparse.Namespace) -> int:
     config = _config(args.config)
     state = _agent(config, demo=args.demo).run()
     print(state.model_dump_json(indent=2))
-    return 0 if state.status == "completed" else 2
+    return 0 if state.status in {"completed", "awaiting_approval"} else 2
 
 
 def cmd_agent_resume(args: argparse.Namespace) -> int:
     config = _config(args.config)
     state = _agent(config, demo=args.demo).resume(args.run_id)
     print(state.model_dump_json(indent=2))
-    return 0 if state.status == "completed" else 2
+    return 0 if state.status in {"completed", "awaiting_approval"} else 2
 
 
 def cmd_agent_status(args: argparse.Namespace) -> int:
     config = _config(args.config)
     state = _agent(config, demo=True).load(args.run_id)
+    print(state.model_dump_json(indent=2))
+    return 0
+
+
+def cmd_agent_topic(args: argparse.Namespace) -> int:
+    config = _config(args.config)
+    state = _agent(config, demo=True).load(args.run_id)
+    value = state.outputs.get("topic_approval")
+    if not value or not Path(value).is_file():
+        raise ValueError("当前任务没有可查看的选题确认单")
+    print(Path(value).read_text(encoding="utf-8"))
+    return 0
+
+
+def cmd_agent_approve_topic(args: argparse.Namespace) -> int:
+    config = _config(args.config)
+    state = _agent(config, demo=True).approve_topic(
+        args.run_id,
+        actor=args.actor,
+        note=args.note,
+    )
+    print(state.model_dump_json(indent=2))
+    return 0
+
+
+def cmd_agent_reject_topic(args: argparse.Namespace) -> int:
+    config = _config(args.config)
+    state = _agent(config, demo=True).reject_topic(
+        args.run_id,
+        actor=args.actor,
+        note=args.note,
+    )
     print(state.model_dump_json(indent=2))
     return 0
 
@@ -439,6 +471,22 @@ def build_parser() -> argparse.ArgumentParser:
     status = agent_commands.add_parser("status", help="查看 Agent 状态")
     status.add_argument("--run-id", required=True)
     status.set_defaults(func=cmd_agent_status)
+
+    topic = agent_commands.add_parser("topic", help="查看待确认选题")
+    topic.add_argument("--run-id", required=True)
+    topic.set_defaults(func=cmd_agent_topic)
+
+    approve_topic = agent_commands.add_parser("approve-topic", help="批准待确认选题")
+    approve_topic.add_argument("--run-id", required=True)
+    approve_topic.add_argument("--actor", default="local-user", help="确认人")
+    approve_topic.add_argument("--note", help="确认备注")
+    approve_topic.set_defaults(func=cmd_agent_approve_topic)
+
+    reject_topic = agent_commands.add_parser("reject-topic", help="拒绝当前选题并允许改选")
+    reject_topic.add_argument("--run-id", required=True)
+    reject_topic.add_argument("--actor", default="local-user", help="确认人")
+    reject_topic.add_argument("--note", help="拒绝原因")
+    reject_topic.set_defaults(func=cmd_agent_reject_topic)
     return parser
 
 
