@@ -86,8 +86,13 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m venv .venv
-          .venv/bin/python -m pip install -U pip
-          .venv/bin/python -m pip install -e .
+          # 跳过升级 pip，避免卡住；依赖走国内镜像。
+          .venv/bin/python -m pip install \
+            --retries 5 \
+            --timeout 60 \
+            -i https://mirrors.aliyun.com/pypi/simple/ \
+            --trusted-host mirrors.aliyun.com \
+            -e .
           echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
 
       - name: Download reviewed article bundle
