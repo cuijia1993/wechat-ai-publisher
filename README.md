@@ -152,6 +152,8 @@ wechat-ai-publisher publish \
 
 真实上传同时满足以下条件才会执行：质量门禁通过、配置关闭 dry-run、提供 `--approved`、视觉清单或参数指定的封面存在、微信凭据完整。任务目录已有成功的 `publish-result.json` 时会直接返回原结果，避免重复创建草稿。
 
+发布配置默认 `publish.open_comment=true`（草稿开启留言，便于互动信号），`publish.max_articles_per_day=1`（运营建议一天一条主推，避免拆散推荐评估）。写作规范与质量门禁已对齐推荐分发信号：开篇 3 秒留存、短段落完读、文末真实讨论问题、禁止机械求赞。
+
 ## 获取发布后数据
 
 认证公众号可使用微信“获取发表内容发表详细数据”接口。配置
@@ -202,7 +204,7 @@ workflows/              旧版工作流模板
 1. 在 Repository Secrets 配置 `OPENAI_API_KEY`；自定义兼容服务时再配置 `OPENAI_BASE_URL`。
 2. 新建 GitHub Environment `topic-approval`，设置至少一名 required reviewer；候选生成后先在工作流 Summary 查看标题、读者问题、核心结论、可复制资产和官方来源，再批准继续写作。该 Environment 不需要保存密钥。
 3. 新建 GitHub Environment `wechat-draft`，设置至少一名 required reviewer，并只在该 Environment 中保存 `WECHAT_APP_ID`、`WECHAT_APP_SECRET`。
-4. 为本仓库注册 self-hosted runner，添加 `wechat-publisher` 标签。runner 应使用独立低权限系统账号和固定出口 IP，并把该 IP 加入公众号后台白名单。
+4. 为本仓库注册 self-hosted runner，添加 `wechat-publisher` 标签。runner 应使用独立低权限系统账号和固定出口 IP，并把该 IP 加入公众号后台白名单；机器上预先安装 Python 3.11+（`python3`/`pip` 在 PATH 中可用），发布工作流不再联网下载解释器。
 5. 手动运行一次 `Generate WeChat Article`，先批准选题；完成后下载 `content-agent-<run_id>`，审阅 HTML、`quality-gate.json`、主编审查和视觉审查结果。
 6. 运行 `Publish WeChat Draft`，输入上一步页面 URL 中的 GitHub `run ID`，再由 `wechat-draft` Environment reviewer 批准发布 Job。
 

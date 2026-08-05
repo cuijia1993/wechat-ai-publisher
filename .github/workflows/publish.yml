@@ -26,13 +26,14 @@ jobs:
         with:
           clean: true
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-          cache: pip
+      # self-hosted runner 上不要用 setup-python 联网下载；预先装好 3.11+ 并确保 PATH 可用。
+      - name: Verify local Python
+        run: |
+          python3 --version
+          python3 -c "import sys; assert sys.version_info >= (3, 11), sys.version"
 
       - name: Install publisher
-        run: pip install -e .
+        run: python3 -m pip install -e .
 
       - name: Download reviewed article bundle
         uses: actions/download-artifact@v4
@@ -45,7 +46,7 @@ jobs:
       - name: Validate publishable bundle
         id: bundle
         run: |
-          python - <<'PY'
+          python3 - <<'PY'
           import json
           import os
           from pathlib import Path
@@ -93,7 +94,7 @@ jobs:
         env:
           JOB_ID: ${{ steps.bundle.outputs.job_id }}
         run: |
-          python - <<'PY'
+          python3 - <<'PY'
           import json
           import os
           from datetime import UTC, datetime
