@@ -103,6 +103,10 @@ def test_concept_image_does_not_also_render_duplicate_html_card():
 
 
 def test_template_images_have_expected_dimensions(tmp_path):
+    from wechat_ai_publisher.rendering.template_images import resolve_cjk_font_path
+
+    resolve_cjk_font_path(bold=True)
+    resolve_cjk_font_path(bold=False)
     renderer = TemplateImageRenderer(
         load_theme(ROOT / "config" / "themes" / "professional-minimal.yaml")
     )

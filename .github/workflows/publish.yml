@@ -139,6 +139,56 @@ jobs:
           WECHAT_APP_SECRET: ${{ secrets.WECHAT_APP_SECRET }}
         run: test -n "$WECHAT_APP_ID" && test -n "$WECHAT_APP_SECRET"
 
+      - name: Install Chinese fonts
+        run: |
+          if command -v apt-get >/dev/null; then
+            sudo apt-get update -qq
+            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq fonts-noto-cjk
+          fi
+
+      - name: Rerender cover with local Chinese fonts
+        env:
+          JOB_ID: ${{ steps.bundle.outputs.job_id }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          from wechat_ai_publisher.config import load_config
+          from wechat_ai_publisher.domain.models import Article, Topic, VisualPlan
+          from wechat_ai_publisher.rendering.template_images import (
+              TemplateImageRenderer,
+              resolve_cjk_font_path,
+          )
+          from wechat_ai_publisher.rendering.theme import load_theme
+
+          job_id = os.environ["JOB_ID"]
+          agent_dir = Path("runtime") / job_id
+          manifest_path = agent_dir / "manifest.json"
+          manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+          cover_path = Path(manifest["outputs"]["cover"])
+          article = Article.model_validate_json(
+              (agent_dir / "article.json").read_text(encoding="utf-8")
+          )
+          topic = Topic.model_validate_json(
+              (agent_dir / "topic.json").read_text(encoding="utf-8")
+          )
+          visual_plan = VisualPlan.model_validate_json(
+              (agent_dir / "visual-plan.json").read_text(encoding="utf-8")
+          )
+          config = load_config(Path("config/account.publish.yaml"))
+          print("using font", resolve_cjk_font_path(bold=True))
+          TemplateImageRenderer(load_theme(config.render.theme_file)).render_cover(
+              title=article.title,
+              subtitle=visual_plan.cover_subtitle,
+              category=topic.category,
+              output=cover_path,
+              brand=config.account.name,
+          )
+          print("rewrote cover", cover_path)
+          PY
+
       - name: Create WeChat draft
         env:
           WECHAT_APP_ID: ${{ secrets.WECHAT_APP_ID }}

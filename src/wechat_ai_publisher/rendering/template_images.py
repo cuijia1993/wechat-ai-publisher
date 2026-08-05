@@ -1,30 +1,62 @@
 from __future__ import annotations
 
 import re
+from functools import lru_cache
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
 from wechat_ai_publisher.rendering.theme import VisualTheme
 
-FONT_CANDIDATES = [
-    "/System/Library/Fonts/PingFang.ttc",
-    "/System/Library/Fonts/STHeiti Light.ttc",
-    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-    "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
+_BUNDLE_DIR = Path(__file__).resolve().parent / "fonts"
+
+_REGULAR_FONT_CANDIDATES = [
+    _BUNDLE_DIR / "NotoSansSC-Regular.otf",
+    _BUNDLE_DIR / "NotoSansCJKsc-Regular.otf",
+    Path("/System/Library/Fonts/PingFang.ttc"),
+    Path("/System/Library/Fonts/STHeiti Light.ttc"),
+    Path("/Library/Fonts/Arial Unicode.ttf"),
+    Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"),
+    Path("/usr/share/fonts/opentype/noto/NotoSansCJKsc-Regular.otf"),
+    Path("/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc"),
+    Path("/usr/share/fonts/truetype/noto/NotoSansSC-Regular.otf"),
+    Path("/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc"),
+    Path("/usr/share/fonts/truetype/wqy/wqy-microhei.ttc"),
+]
+
+_BOLD_FONT_CANDIDATES = [
+    _BUNDLE_DIR / "NotoSansSC-Bold.otf",
+    _BUNDLE_DIR / "NotoSansCJKsc-Bold.otf",
+    Path("/System/Library/Fonts/PingFang.ttc"),
+    Path("/System/Library/Fonts/STHeiti Medium.ttc"),
+    Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc"),
+    Path("/usr/share/fonts/opentype/noto/NotoSansCJKsc-Bold.otf"),
+    Path("/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc"),
+    Path("/usr/share/fonts/truetype/noto/NotoSansSC-Bold.otf"),
+    # Linux 上缺独立 Bold 时，用常规中文字体也优于 Pillow 默认字体。
+    *_REGULAR_FONT_CANDIDATES,
 ]
 
 
-def _font(size: int, *, bold: bool = False):
-    candidates = (
-        ["/System/Library/Fonts/PingFang.ttc", "/System/Library/Fonts/STHeiti Medium.ttc"]
-        if bold
-        else FONT_CANDIDATES
-    )
+@lru_cache(maxsize=1)
+def resolve_cjk_font_path(*, bold: bool = False) -> Path:
+    candidates = _BOLD_FONT_CANDIDATES if bold else _REGULAR_FONT_CANDIDATES
     for candidate in candidates:
-        if Path(candidate).is_file():
-            return ImageFont.truetype(candidate, size=size, index=0)
-    return ImageFont.load_default(size=size)
+        if candidate.is_file():
+            return candidate
+    searched = ", ".join(str(path) for path in candidates[:8])
+    raise FileNotFoundError(
+        "未找到可用中文字体，封面会乱码。请安装 fonts-noto-cjk，"
+        f"或将字体放到 {_BUNDLE_DIR}。已尝试：{searched}"
+    )
+
+
+def _font(size: int, *, bold: bool = False):
+    path = resolve_cjk_font_path(bold=bold)
+    try:
+        return ImageFont.truetype(str(path), size=size, index=0)
+    except OSError:
+        return ImageFont.truetype(str(path), size=size)
 
 
 def _wrap(draw: ImageDraw.ImageDraw, text: str, font, max_width: int, max_lines: int) -> list[str]:
@@ -134,4 +166,3 @@ class TemplateImageRenderer:
         output.parent.mkdir(parents=True, exist_ok=True)
         image.save(output, format="PNG", optimize=True)
         return output
-

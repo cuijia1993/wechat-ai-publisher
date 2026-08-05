@@ -109,6 +109,11 @@ jobs:
       - name: Install publisher
         run: pip install -e .
 
+      - name: Install Chinese fonts
+        run: |
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq fonts-noto-cjk
+
       - name: Download approved topic candidate
         uses: actions/download-artifact@v4
         with:
