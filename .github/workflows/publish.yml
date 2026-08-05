@@ -83,7 +83,12 @@ jobs:
           python3 -c "import sys; assert sys.version_info >= (3, 11), sys.version"
 
       - name: Install publisher
-        run: python3 -m pip install -e .
+        run: |
+          set -euo pipefail
+          python3 -m venv .venv
+          .venv/bin/python -m pip install -U pip
+          .venv/bin/python -m pip install -e .
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
 
       - name: Download reviewed article bundle
         uses: actions/download-artifact@v4
