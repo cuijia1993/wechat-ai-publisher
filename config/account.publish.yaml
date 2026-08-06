@@ -4,7 +4,8 @@ account:
   default_digest: 关注 AI 如何影响普通人的工作、钱包、安全、健康与家庭，提供看得懂、用得上的判断和避坑清单。
 
 model:
-  model: qwen3.7-max
+  model: qwen3.7-max-2026-05-17
+  model_env: OPENAI_MODEL
   base_url: https://llm-q5islkwwval2g1sf.cn-beijing.maas.aliyuncs.com/compatible-mode/v1
   base_url_env: OPENAI_BASE_URL
   api_key_env: OPENAI_API_KEY

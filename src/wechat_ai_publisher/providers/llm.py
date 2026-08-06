@@ -50,7 +50,7 @@ class OpenAICompatibleProvider:
     def structured(self, *, system: str, user: str, response_model: type[T]) -> T:
         schema = json.dumps(response_model.model_json_schema(), ensure_ascii=False)
         completion = self.client.chat.completions.create(
-            model=self.config.model,
+            model=self.config.resolved_model,
             temperature=self.config.temperature,
             messages=[
                 {
@@ -88,7 +88,7 @@ class OpenAICompatibleProvider:
                 }
             )
         completion = self.client.chat.completions.create(
-            model=self.config.model,
+            model=self.config.resolved_model,
             temperature=self.config.temperature,
             messages=[
                 {

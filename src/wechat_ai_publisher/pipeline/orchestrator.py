@@ -60,7 +60,11 @@ class ContentPipeline:
         job_id = f"{datetime.now():%Y%m%d-%H%M%S}-{uuid4().hex[:8]}"
         job_dir = self.config.content.output_dir / job_id
         job_dir.mkdir(parents=True, exist_ok=False)
-        manifest = JobManifest(job_id=job_id, topic_id=topic.id, model=self.config.model.model)
+        manifest = JobManifest(
+            job_id=job_id,
+            topic_id=topic.id,
+            model=self.config.model.resolved_model,
+        )
         self._save_manifest(job_dir, manifest)
 
         try:

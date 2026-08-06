@@ -2,6 +2,11 @@ name: Generate WeChat Article
 
 on:
   workflow_dispatch:
+    inputs:
+      model:
+        description: "本次生成使用的模型名称（留空则使用仓库变量或 YAML 默认值）"
+        required: false
+        type: string
   schedule:
     - cron: "0 1 * * 1"
 
@@ -39,6 +44,7 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
+          OPENAI_MODEL: ${{ inputs.model || vars.OPENAI_MODEL }}
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           wechat-ai-publisher \
@@ -167,6 +173,7 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
+          OPENAI_MODEL: ${{ inputs.model || vars.OPENAI_MODEL }}
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           wechat-ai-publisher \

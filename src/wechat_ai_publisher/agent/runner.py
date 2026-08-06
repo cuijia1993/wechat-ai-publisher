@@ -156,7 +156,7 @@ class ContentOperationsAgent:
         directory.mkdir(parents=True, exist_ok=False)
         state = AgentRun(
             run_id=run_id,
-            model=self.config.model.model,
+            model=self.config.model.resolved_model,
             max_revisions=self.config.agent.max_revisions,
             max_steps=self.config.agent.max_steps,
         )

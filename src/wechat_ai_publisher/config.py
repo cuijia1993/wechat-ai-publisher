@@ -17,12 +17,17 @@ class AccountConfig(BaseModel):
 
 class ModelConfig(BaseModel):
     model: str
+    model_env: str = "OPENAI_MODEL"
     base_url: str | None = None
     base_url_env: str = "OPENAI_BASE_URL"
     api_key_env: str = "OPENAI_API_KEY"
     supports_vision: bool = False
     temperature: float = 0.3
     max_retries: int = 3
+
+    @property
+    def resolved_model(self) -> str:
+        return os.getenv(self.model_env) or self.model
 
     @property
     def resolved_base_url(self) -> str | None:

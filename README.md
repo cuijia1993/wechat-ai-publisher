@@ -129,7 +129,8 @@ wechat-ai-publisher publish --job <job_id> --dry-run
 
 配置项在 `config/account.yaml`：
 
-- `model.model`：模型名称，当前配置为 `qwen3.7-max`。
+- `model.model`：未被环境变量覆盖时使用的模型名称，当前配置为 `qwen3.7-max-2026-05-17`。
+- `model.model_env`：可覆盖模型名称的环境变量名，默认 `OPENAI_MODEL`。
 - `model.base_url`：默认兼容接口地址，当前配置为阿里云 MaaS 地址。
 - `model.api_key_env`：密钥环境变量名，默认 `OPENAI_API_KEY`。
 - `model.base_url_env`：可覆盖默认地址的环境变量名，默认 `OPENAI_BASE_URL`。
@@ -201,7 +202,7 @@ workflows/              旧版工作流模板
 
 仓库设置：
 
-1. 在 Repository Secrets 配置 `OPENAI_API_KEY`；自定义兼容服务时再配置 `OPENAI_BASE_URL`。
+1. 在 Repository Secrets 配置 `OPENAI_API_KEY`；自定义兼容服务时再配置 `OPENAI_BASE_URL`。如需长期切换模型，可在 Repository Variables 配置 `OPENAI_MODEL`；手动运行生成工作流时填写的模型名称优先级更高。
 2. 新建 GitHub Environment `topic-approval`，设置至少一名 required reviewer；候选生成后先在工作流 Summary 查看标题、读者问题、核心结论、可复制资产和官方来源，再批准继续写作。该 Environment 不需要保存密钥。
 3. 新建 GitHub Environment `wechat-draft`，设置至少一名 required reviewer，并只在该 Environment 中保存 `WECHAT_APP_ID`、`WECHAT_APP_SECRET`。
 4. 为本仓库注册 self-hosted runner，添加 `wechat-publisher` 标签。runner 应使用独立低权限系统账号和固定出口 IP，并把该 IP 加入公众号后台白名单；机器上预先安装 Python 3.11+（`python3`/`pip` 在 PATH 中可用），发布工作流不再联网下载解释器。发布机无需 sudo：若缺少中文字体，工作流会把文泉驿微米黑下载到用户目录并在上传前重绘封面。
