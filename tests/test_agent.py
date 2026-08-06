@@ -65,12 +65,16 @@ def build_agent(
     )
 
 
-def test_agent_runs_to_local_draft_and_resume_is_idempotent(tmp_path):
+def test_agent_runs_to_local_draft_and_resume_is_idempotent(tmp_path, capsys):
     agent = build_agent(tmp_path)
 
     state = agent.run()
+    captured = capsys.readouterr()
 
     assert state.status == "completed"
+    assert captured.out == ""
+    assert '"event": "step_started"' in captured.err
+    assert '"event": "step_finished"' in captured.err
     assert Path(state.outputs["draft_markdown"]).is_file()
     assert Path(state.outputs["draft_html"]).is_file()
     assert Path(state.outputs["visual_manifest"]).is_file()

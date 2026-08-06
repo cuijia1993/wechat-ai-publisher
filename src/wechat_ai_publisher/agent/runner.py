@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import re
+import sys
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -266,6 +267,7 @@ class ContentOperationsAgent:
                     },
                     ensure_ascii=False,
                 ),
+                file=sys.stderr,
                 flush=True,
             )
             started = time.monotonic()
@@ -298,6 +300,7 @@ class ContentOperationsAgent:
                         },
                         ensure_ascii=False,
                     ),
+                    file=sys.stderr,
                     flush=True,
                 )
             if state.status == "failed":
