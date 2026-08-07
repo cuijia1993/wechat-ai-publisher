@@ -24,6 +24,7 @@ discovery:
 agent:
   max_steps: 40
   max_revisions: 2
+  topic_selection_batch_size: 5
   stage_timeout_seconds: 180
   draft_only: true
   require_topic_approval: true

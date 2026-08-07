@@ -192,6 +192,42 @@ def test_topic_agent_stops_before_research_when_topic_is_rejected(tmp_path):
     assert "research" not in state.outputs
 
 
+class RejectBatchProvider(RejectTopicProvider):
+    def __init__(self):
+        self.batch_sizes = []
+
+    def structured(self, *, system: str, user: str, response_model):
+        if response_model is TopicBrief:
+            self.batch_sizes.append(len(json.loads(user)["candidates"]))
+        return super().structured(
+            system=system,
+            user=user,
+            response_model=response_model,
+        )
+
+
+def test_topic_agent_rejects_candidates_in_batches(tmp_path):
+    signals = [
+        signal().model_copy(
+            update={
+                "id": f"candidate-{index}",
+                "url": f"https://example.com/candidate-{index}",
+                "score": 100 - index,
+            }
+        )
+        for index in range(6)
+    ]
+    provider = RejectBatchProvider()
+
+    state = build_agent(tmp_path, provider, signals=signals).run()
+
+    assert state.status == "blocked"
+    assert provider.batch_sizes == [5, 1]
+    assert state.rejected_signal_ids == [
+        f"candidate-{index}" for index in range(6)
+    ]
+
+
 class UnboundResearchProvider(DemoProvider):
     def structured(self, *, system: str, user: str, response_model):
         value = super().structured(

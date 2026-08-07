@@ -28,6 +28,7 @@ def test_load_config_resolves_project_paths(monkeypatch):
     )
     assert config.publish.mode == "draft_only"
     assert config.publish.auto_publish_after_approval is False
+    assert config.agent.topic_selection_batch_size == 5
     sources = load_sources_config(config.discovery.sources_file)
     assert {"OpenAI News", "Google AI", "Google Workspace Updates"} <= {
         source.name for source in sources.rss

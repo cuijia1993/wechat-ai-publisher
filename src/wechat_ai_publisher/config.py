@@ -52,6 +52,7 @@ class DiscoveryConfig(BaseModel):
 class AgentConfig(BaseModel):
     max_steps: int = 40
     max_revisions: int = 2
+    topic_selection_batch_size: int = Field(default=5, ge=1, le=10)
     stage_timeout_seconds: float = 180
     draft_only: bool = True
     require_topic_approval: bool = True
