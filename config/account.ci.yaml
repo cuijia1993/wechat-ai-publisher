@@ -23,7 +23,7 @@ discovery:
   sources_file: config/sources.yaml
 
 agent:
-  max_steps: 40
+  max_steps: 80
   max_revisions: 2
   stage_timeout_seconds: 180
   draft_only: true
